@@ -1,0 +1,52 @@
+# dry-run: nada é enviado | approval: pede sua confirmação | auto: envia sozinho acima de min_score
+mode: dry-run
+min_score: 70
+daily_application_limit: 15
+max_scores_per_run: 30
+
+browser:
+  headless: true
+
+http:
+  min_delay_seconds: 2
+  max_delay_seconds: 6
+
+llm:
+  scoring_model: haiku
+  writing_model: sonnet
+  timeout_seconds: 180
+
+sources:
+  greenhouse:
+    enabled: true
+    boards: [stone, quintoandar, vtex, gympass, c6bank, rdstation]
+  lever:
+    enabled: true
+    companies: [neon, ciandt]
+  programathor:
+    enabled: true
+    max_pages: 3
+  # Desligada: os termos de uso da Gupy proíbem "agregar, copiar ou duplicar partes" da plataforma.
+  gupy:
+    enabled: false
+    queries: ["estagio desenvolvimento", "estagio software", "desenvolvedor junior"]
+  # Desligada: os termos de uso da Vagas.com proíbem reproduzir o conteúdo do site.
+  vagas:
+    enabled: false
+    queries: ["estagio-desenvolvimento", "desenvolvedor-junior"]
+  # LinkedIn e Indeed sem automação: lê os alertas de vagas que chegam no seu próprio e-mail.
+  email_alerts:
+    enabled: false
+    senders: [jobalerts-noreply@linkedin.com, jobs-noreply@linkedin.com, alert@indeed.com, jobalerts@indeed.com]
+    lookback_days: 3
+
+tracking:
+  email: false
+  lookback_days: 14
+
+notifications:
+  telegram: false
+  email: false
+
+auto_reply:
+  enabled: false

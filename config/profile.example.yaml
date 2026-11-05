@@ -1,0 +1,53 @@
+# Copie para config/profile.yaml (fora do git) e troque pelos seus dados reais.
+# Tudo aqui é tratado como verdade pelo jobbot: os textos gerados só podem usar estes fatos e seus documentos.
+personal:
+  name: "Seu Nome Completo"
+  email: "voce@exemplo.com"
+  phone: "+55 11 90000-0000"
+  city: "São Paulo"
+  state: "SP"
+  linkedin: "https://www.linkedin.com/in/seu-usuario"
+  github: "https://github.com/seu-usuario"
+  portfolio: ""
+
+objective: "Estágio ou vaga júnior em desenvolvimento de software."
+
+education:
+  - course: "Bacharelado em Ciência da Computação"
+    institution: "Sua Universidade"
+    status: "cursando"
+    expected_graduation: "2028-12"
+
+seniority: [estagio, junior]
+stack: [Python, JavaScript, SQL, Git]
+languages: ["Português (nativo)", "Inglês (intermediário)"]
+
+locations:
+  cities: ["São Paulo"]
+  remote: true
+  hybrid: true
+  onsite: false
+
+# Nunca é enviada automaticamente: pergunta sobre salário sempre para e pede sua decisão.
+salary_range:
+  min: null
+  max: null
+
+keywords:
+  # A vaga precisa citar ao menos uma destas no título ou na descrição.
+  positive: [desenvolvedor, desenvolvimento, developer, software, programador, backend, frontend, fullstack, python, javascript, dados, engenharia de software, tecnologia, ti]
+  # Citada no título, a vaga é descartada.
+  negative: [vendas, comercial, telemarketing, marketing, juridico, contabil, recursos humanos, pcd exclusiva]
+
+# Vagas que exigem mais anos de experiência do que isto são descartadas.
+max_years_required: 2
+
+# Fatos verdadeiros que não estão no currículo (projetos, cursos, disponibilidade para mudar etc.).
+facts: []
+
+# Usada apenas em respostas logísticas, quando você ligar auto_reply em settings.yaml.
+availability: "Segunda a sexta, das 14h às 18h"
+
+documents:
+  resume: documents/curriculo.pdf
+  extras: []

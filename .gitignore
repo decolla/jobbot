@@ -1,0 +1,16 @@
+# Segredos e dados pessoais
+.env
+config/profile.yaml
+documents/*
+!documents/.gitkeep
+data/*
+!data/.gitkeep
+reports/*
+!reports/.gitkeep
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+dist/
