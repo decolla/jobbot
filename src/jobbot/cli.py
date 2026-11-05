@@ -4,13 +4,17 @@ from __future__ import annotations
 
 import argparse
 import sys
+import traceback
+from datetime import date
 
 from jobbot import db, pipeline
 from jobbot.apply import manual
-from jobbot.apply.base import Applier, ApplySummary, mark_done, reject_application
+from jobbot.apply.base import Applier, ApplySummary, mark_done, recover_interrupted, reject_application
 from jobbot.apply.form_filler import login_interactively
 from jobbot.llm import LLMError
+from jobbot.notify import notify
 from jobbot.notify.email import send_email
+from jobbot.notify.report import render_summary, write_report
 from jobbot.profile import ConfigError, check_setup, load_env, load_profile, load_settings, project_root
 from jobbot.tracking.mailbox import Mailbox, MailboxError
 from jobbot.tracking.status_checker import check_open_jobs, run_tracking
@@ -79,6 +83,9 @@ def cmd_apply(args: argparse.Namespace) -> int:
     mode = args.mode or settings.mode
     conn = open_db(root)
     try:
+        recovered = recover_interrupted(conn)
+        if recovered:
+            print(f"[AVISO] {recovered} envio(s) interrompido(s) viraram pendência para você conferir.")
         summary = _build_applier(conn, root, settings).run(mode, retry_blocked=args.retry_blocked)
     finally:
         conn.close()
@@ -189,6 +196,52 @@ def cmd_resolve(args: argparse.Namespace) -> int:
     return 0
 
 
+def _write_report(root, settings) -> tuple:
+    conn = open_db(root)
+    try:
+        path, data = write_report(conn, root, date.today(), settings.min_score)
+    finally:
+        conn.close()
+    return path, render_summary(data, path)
+
+
+def cmd_report(args: argparse.Namespace) -> int:
+    root = project_root()
+    path, summary = _write_report(root, load_settings(root))
+    print(summary)
+    return 0
+
+
+DAILY_STEPS = (("busca", cmd_search), ("pontuação", cmd_score), ("candidatura", cmd_apply), ("acompanhamento", cmd_track))
+
+
+def cmd_run_daily(args: argparse.Namespace) -> int:
+    """Roda tudo em sequência. A falha de uma etapa fica no relatório e não impede as seguintes."""
+    root = project_root()
+    settings = load_settings(root)
+    failures = []
+    for name, step in DAILY_STEPS:
+        print(f"== {name} ==", flush=True)
+        try:
+            if step(argparse.Namespace(mode=None, retry_blocked=False)) != 0:
+                failures.append(name)
+        except Exception as exc:  # execução sem ninguém olhando: registra e segue para a próxima etapa
+            failures.append(name)
+            print(f"[FALHA] {name}: {exc}", file=sys.stderr)
+            traceback.print_exc()
+            conn = open_db(root)
+            try:
+                db.log(conn, "error", "run-daily", f"{name}: {type(exc).__name__}: {exc}")
+            finally:
+                conn.close()
+    print("== relatório ==", flush=True)
+    path, summary = _write_report(root, settings)
+    print(summary)
+    for error in notify(settings, load_env(root), f"jobbot: relatório de {date.today().isoformat()}", summary):
+        print(f"[AVISO] notificação: {error}")
+    return 1 if failures else 0
+
+
 def cmd_login(args: argparse.Namespace) -> int:
     print("Faça login na janela do navegador e feche-a ao terminar. O jobbot não vê nem guarda sua senha.")
     login_interactively(project_root() / "data" / "browser_profile", args.url)
@@ -250,6 +303,10 @@ def build_parser() -> argparse.ArgumentParser:
     add_parser.set_defaults(func=cmd_add)
 
     commands.add_parser("track", help="acompanha e-mails do processo e vagas encerradas").set_defaults(func=cmd_track)
+    commands.add_parser("report", help="gera o relatório do dia em reports/").set_defaults(func=cmd_report)
+    commands.add_parser("run-daily", help="busca, pontua, candidata, acompanha e gera o relatório").set_defaults(
+        func=cmd_run_daily
+    )
 
     for name, func, description in (
         ("approve", cmd_approve, "aprova e envia uma candidatura"),

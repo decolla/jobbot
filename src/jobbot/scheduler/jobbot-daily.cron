@@ -1,0 +1,9 @@
+# Exemplo de crontab (Linux/macOS): roda o jobbot todo dia às 8h30.
+#
+# Para ativar: rode "crontab -e" e cole as duas linhas abaixo, trocando SEU_USUARIO e o caminho do projeto.
+# O cron não lê o PATH do seu shell: a linha PATH precisa incluir as pastas do uv e do claude
+# (veja com "which uv" e "which claude").
+# A saída de cada execução vai para data/run-daily.log.
+
+PATH=/home/SEU_USUARIO/.local/bin:/usr/local/bin:/usr/bin:/bin
+30 8 * * * cd /home/SEU_USUARIO/jobbot && uv run jobbot run-daily >> data/run-daily.log 2>&1

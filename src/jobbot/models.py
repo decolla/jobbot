@@ -8,7 +8,7 @@ import unicodedata
 from typing import Literal
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-from pydantic import BaseModel, computed_field
+from pydantic import BaseModel, computed_field, field_validator
 
 Modality = Literal["remote", "hybrid", "onsite", "unknown"]
 
@@ -55,6 +55,11 @@ class Job(BaseModel):
     source: str
     # "manual": o jobbot prepara o material, mas quem envia é o usuário (LinkedIn, Indeed, Gupy...).
     apply_path: Literal["form", "manual"] = "form"
+
+    @field_validator("title", "company", "location")
+    @classmethod
+    def _collapse_whitespace(cls, value: str) -> str:
+        return " ".join(value.split())
 
     @classmethod
     def from_row(cls, row) -> "Job":

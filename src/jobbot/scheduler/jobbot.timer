@@ -1,0 +1,13 @@
+# Timer do systemd que roda o jobbot.service todo dia às 8h30.
+# Persistent=true: se o computador estava desligado no horário, roda assim que ligar.
+
+[Unit]
+Description=Roda o jobbot todo dia
+
+[Timer]
+OnCalendar=*-*-* 08:30:00
+Persistent=true
+RandomizedDelaySec=15m
+
+[Install]
+WantedBy=timers.target

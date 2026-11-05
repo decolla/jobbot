@@ -1,0 +1,19 @@
+# Serviço de usuário do systemd (Linux), disparado pelo jobbot.timer.
+#
+# Para ativar (troque o caminho do projeto em WorkingDirectory se não for ~/jobbot):
+#   mkdir -p ~/.config/systemd/user
+#   cp jobbot.service jobbot.timer ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now jobbot.timer
+# Para rodar mesmo sem você logado: loginctl enable-linger $USER
+# Para ver a saída: journalctl --user -u jobbot
+
+[Unit]
+Description=jobbot: busca vagas, candidata e acompanha processos
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/jobbot
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=%h/.local/bin/uv run jobbot run-daily

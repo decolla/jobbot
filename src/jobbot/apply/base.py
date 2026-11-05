@@ -6,7 +6,7 @@ import json
 import re
 import sqlite3
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Callable
 
@@ -322,6 +322,20 @@ class Applier:
             lines += ["", "## Só você pode responder", ""]
             lines += [f"- {blocker}" for blocker in plan.blockers]
         (self._app_dir(app_id) / "pacote.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def recover_interrupted(conn: sqlite3.Connection, max_age: timedelta = timedelta(hours=1)) -> int:
+    """Envio preso em 'submitting' (o processo caiu no meio) vira incerto: o usuário confere, nunca é repetido."""
+    limit = datetime.now().astimezone() - max_age
+    recovered = 0
+    for app in db.applications_by_status(conn, "submitting"):
+        if datetime.fromisoformat(app["updated_at"]) > limit:
+            continue  # pode ser um envio acontecendo agora
+        db.set_application_status(conn, app["id"], "submit_uncertain", "o envio foi interrompido; confira pelo link")
+        db.add_action_item(conn, app["id"], "submit_uncertain", f"Conferir envio: {app['title']}", link=app["url"])
+        db.log_event(conn, "application_submit_interrupted", application_id=app["id"], job_id=app["job_id"])
+        recovered += 1
+    return recovered
 
 
 def reject_application(conn: sqlite3.Connection, app_id: int) -> None:

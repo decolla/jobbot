@@ -23,6 +23,11 @@ def test_hash_ignores_url_and_source():
     assert _job().hash == _job(url="https://outra.io/9", source="lever").hash
 
 
+def test_extra_whitespace_from_sources_is_collapsed():
+    job = _job(title=" SOFTWARE ENGINEER I .NET", company="Acme\n", location="São  Paulo ")
+    assert (job.title, job.company, job.location) == ("SOFTWARE ENGINEER I .NET", "Acme", "São Paulo")
+
+
 @pytest.mark.parametrize(
     "text,expected",
     [

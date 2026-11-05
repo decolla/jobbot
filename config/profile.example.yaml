@@ -49,12 +49,27 @@ facts: []
 availability: "Segunda a sexta, das 14h às 18h"
 
 # Respostas que você decidiu dar sempre. Sem isto, perguntas sensíveis obrigatórias param a candidatura.
-# "match" é um trecho da pergunta. Salário nunca é respondido automaticamente, mesmo que apareça aqui.
+# "match" é um trecho da pergunta (sem diferença de acentos e maiúsculas); "answer" precisa ser igual a uma
+# das opções do formulário. Salário nunca é respondido automaticamente, mesmo que apareça aqui.
+# As perguntas abaixo apareceram de verdade em formulários (Stone, C6 Bank). Descomente só as que você
+# quer responder sempre, com a SUA resposta: cada linha é uma decisão sua.
 saved_answers: []
+#  - match: "indicação"                 # "Você é indicação de algum colaborador?"
+#    answer: "Não"
+#  - match: "indicad"                   # "Você é uma pessoa indicada por...?"
+#    answer: "Não"
+#  - match: "já trabalhou"              # "Você já trabalhou na empresa?"
+#    answer: "Não"
+#  - match: "parentesco"                # "Possui grau de parentesco com algum colaborador?"
+#    answer: "Não"
+#  - match: "como você conheceu"        # "Como você conheceu a empresa?"
+#    answer: "LinkedIn"
 #  - match: "pessoa com deficiência"
 #    answer: "Não"
-#  - match: "como soube"
-#    answer: "Outro"
+#  - match: "possui alguma deficiência"
+#    answer: "Não"
+#  - match: "cpf"                       # fica só neste arquivo local, fora do git
+#    answer: "TROQUE-PELO-SEU-CPF"
 
 documents:
   resume: documents/curriculo.pdf
