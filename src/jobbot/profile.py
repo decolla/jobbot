@@ -67,6 +67,11 @@ class Documents(_Strict):
     extras: list[str] = Field(default_factory=list)
 
 
+class SavedAnswer(_Strict):
+    match: str
+    answer: str
+
+
 class Profile(_Strict):
     personal: Personal
     objective: str
@@ -80,6 +85,7 @@ class Profile(_Strict):
     max_years_required: int = 2
     facts: list[str] = Field(default_factory=list)
     availability: str = ""
+    saved_answers: list[SavedAnswer] = Field(default_factory=list)
     documents: Documents
 
     @property

@@ -48,6 +48,14 @@ facts: []
 # Usada apenas em respostas logísticas, quando você ligar auto_reply em settings.yaml.
 availability: "Segunda a sexta, das 14h às 18h"
 
+# Respostas que você decidiu dar sempre. Sem isto, perguntas sensíveis obrigatórias param a candidatura.
+# "match" é um trecho da pergunta. Salário nunca é respondido automaticamente, mesmo que apareça aqui.
+saved_answers: []
+#  - match: "pessoa com deficiência"
+#    answer: "Não"
+#  - match: "como soube"
+#    answer: "Outro"
+
 documents:
   resume: documents/curriculo.pdf
   extras: []

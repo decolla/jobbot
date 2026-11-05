@@ -216,20 +216,33 @@ def claim_for_submission(conn: sqlite3.Connection, app_id: int) -> bool:
     return cursor.rowcount == 1
 
 
-def mark_submitted(conn: sqlite3.Connection, app_id: int, when: datetime | None = None) -> None:
+def mark_submitted(conn: sqlite3.Connection, app_id: int, when: datetime | None = None, mode: str | None = None) -> None:
     stamp = when.isoformat(timespec="seconds") if when else _now()
     conn.execute(
-        "UPDATE applications SET status = 'submitted', reason = NULL, submitted_at = ?, updated_at = ? WHERE id = ?",
-        (stamp, _now(), app_id),
+        """UPDATE applications SET status = 'submitted', reason = NULL, submitted_at = ?, updated_at = ?,
+                  mode = COALESCE(?, mode) WHERE id = ?""",
+        (stamp, _now(), mode, app_id),
     )
     add_stage(conn, app_id, "applied", "jobbot", occurred_at=stamp)
 
 
 def submissions_on(conn: sqlite3.Connection, day: date) -> int:
+    """Envios feitos pelo jobbot no dia. O que o usuário enviou à mão não consome o limite."""
     row = conn.execute(
-        "SELECT COUNT(*) FROM applications WHERE substr(submitted_at, 1, 10) = ?", (day.isoformat(),)
+        "SELECT COUNT(*) FROM applications WHERE substr(submitted_at, 1, 10) = ? AND mode != 'manual'",
+        (day.isoformat(),),
     ).fetchone()
     return row[0]
+
+
+def jobs_ready_to_apply(conn: sqlite3.Connection, min_score: int, retryable: list[str]) -> list[sqlite3.Row]:
+    marks = ",".join("?" * len(retryable))
+    return conn.execute(
+        f"""SELECT j.* FROM jobs j LEFT JOIN applications a ON a.job_id = j.id
+            WHERE j.status = 'scored' AND j.score >= ? AND (a.id IS NULL OR a.status IN ({marks}))
+            ORDER BY j.score DESC, j.id""",
+        (min_score, *retryable),
+    ).fetchall()
 
 
 def add_stage(conn: sqlite3.Connection, app_id: int, stage: str, source: str, detail: str | None = None,
@@ -269,6 +282,14 @@ def set_action_prep(conn: sqlite3.Connection, item_id: int, prep_path: str) -> N
 
 def complete_action_item(conn: sqlite3.Connection, item_id: int) -> bool:
     return conn.execute("UPDATE action_items SET status = 'done' WHERE id = ? AND status = 'open'", (item_id,)).rowcount == 1
+
+
+def complete_action_items(conn: sqlite3.Connection, app_id: int, kinds: list[str]) -> None:
+    marks = ",".join("?" * len(kinds))
+    conn.execute(
+        f"UPDATE action_items SET status = 'done' WHERE application_id = ? AND status = 'open' AND kind IN ({marks})",
+        (app_id, *kinds),
+    )
 
 
 def open_action_items(conn: sqlite3.Connection) -> list[sqlite3.Row]:
