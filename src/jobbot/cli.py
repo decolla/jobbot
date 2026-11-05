@@ -10,7 +10,10 @@ from jobbot.apply import manual
 from jobbot.apply.base import Applier, ApplySummary, mark_done, reject_application
 from jobbot.apply.form_filler import login_interactively
 from jobbot.llm import LLMError
-from jobbot.profile import ConfigError, check_setup, load_profile, load_settings, project_root
+from jobbot.notify.email import send_email
+from jobbot.profile import ConfigError, check_setup, load_env, load_profile, load_settings, project_root
+from jobbot.tracking.mailbox import Mailbox, MailboxError
+from jobbot.tracking.status_checker import check_open_jobs, run_tracking
 
 
 def open_db(root):
@@ -132,6 +135,60 @@ def cmd_add(args: argparse.Namespace) -> int:
     return 0
 
 
+def _email_sender(env: dict[str, str]):
+    def send(to: str, subject: str, body: str, in_reply_to: str | None = None) -> None:
+        send_email(env, to, subject, body, in_reply_to=in_reply_to)
+
+    return send
+
+
+def cmd_track(args: argparse.Namespace) -> int:
+    root = project_root()
+    settings = load_settings(root)
+    profile = load_profile(root)
+    conn = open_db(root)
+    failed = False
+    try:
+        if settings.tracking.email:
+            env = load_env(root)
+            send = _email_sender(env) if settings.auto_reply.enabled else None
+            try:
+                summary = run_tracking(conn, settings, profile, root, Mailbox.from_env(env),
+                                       pipeline.build_llm(settings), send=send)
+            except (MailboxError, ConfigError) as exc:
+                failed = True
+                db.log(conn, "error", "track", str(exc))
+                print(f"[FALHA] e-mail: {exc}")
+            else:
+                print(
+                    f"E-mails novos: {summary.messages} | etapas registradas: {summary.stage_changes} | "
+                    f"pendências criadas: {summary.actions} | envios confirmados: {summary.confirmed} | "
+                    f"respostas automáticas: {summary.replies} | ambíguos: {summary.ambiguous} | erros: {summary.errors}"
+                )
+        else:
+            print("Acompanhamento por e-mail desligado (tracking.email em settings.yaml).")
+        closed = check_open_jobs(conn, pipeline.build_http(settings))
+    finally:
+        conn.close()
+    print(f"Portais: {closed} vaga(s) encerrada(s).")
+    return 1 if failed else 0
+
+
+def cmd_resolve(args: argparse.Namespace) -> int:
+    conn = open_db(project_root())
+    try:
+        done = db.complete_action_item(conn, args.id)
+        if done:
+            db.log_event(conn, "action_resolved", payload={"action_item": args.id})
+    finally:
+        conn.close()
+    if not done:
+        print(f"[ERRO] pendência {args.id} não existe ou já foi resolvida", file=sys.stderr)
+        return 1
+    print(f"Pendência {args.id} resolvida.")
+    return 0
+
+
 def cmd_login(args: argparse.Namespace) -> int:
     print("Faça login na janela do navegador e feche-a ao terminar. O jobbot não vê nem guarda sua senha.")
     login_interactively(project_root() / "data" / "browser_profile", args.url)
@@ -164,7 +221,8 @@ def cmd_status(args: argparse.Namespace) -> int:
         if actions:
             print("Pendências:")
         for item in actions:
-            print(f"  - [{item['due_date'] or 'sem prazo'}] {item['title']} ({item['company']}) {item['link'] or ''}".rstrip())
+            line = f"  - #{item['id']} [{item['due_date'] or 'sem prazo'}] {item['title']} ({item['company']}) {item['link'] or ''}"
+            print(line.rstrip())
     finally:
         conn.close()
     labels = {"error": "ERRO", "warning": "AVISO"}
@@ -191,10 +249,13 @@ def build_parser() -> argparse.ArgumentParser:
     add_parser.add_argument("url")
     add_parser.set_defaults(func=cmd_add)
 
+    commands.add_parser("track", help="acompanha e-mails do processo e vagas encerradas").set_defaults(func=cmd_track)
+
     for name, func, description in (
         ("approve", cmd_approve, "aprova e envia uma candidatura"),
         ("reject", cmd_reject, "descarta uma candidatura"),
         ("done", cmd_done, "registra uma candidatura que você enviou à mão"),
+        ("resolve", cmd_resolve, "marca uma pendência (teste, entrevista...) como resolvida"),
     ):
         command = commands.add_parser(name, help=description)
         command.add_argument("id", type=int)

@@ -196,4 +196,4 @@ def test_every_configured_source_is_registered():
 
     repo_settings = Path(__file__).resolve().parents[1] / "config" / "settings.yaml"
     names = set(yaml.safe_load(repo_settings.read_text(encoding="utf-8"))["sources"])
-    assert names - {"email_alerts"} <= set(SOURCES)
+    assert names <= set(SOURCES)

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from jobbot.profile import ConfigError, SourceSettings
 from jobbot.sources.base import PoliteClient, Source
+from jobbot.sources.email_alerts import EmailAlertsSource
 from jobbot.sources.greenhouse import GreenhouseSource
 from jobbot.sources.gupy import GupySource
 from jobbot.sources.lever import LeverSource
@@ -11,7 +12,8 @@ from jobbot.sources.programathor import ProgramathorSource
 from jobbot.sources.vagas import VagasSource
 
 SOURCES: dict[str, type[Source]] = {
-    source.name: source for source in (GreenhouseSource, LeverSource, GupySource, ProgramathorSource, VagasSource)
+    source.name: source
+    for source in (GreenhouseSource, LeverSource, GupySource, ProgramathorSource, VagasSource, EmailAlertsSource)
 }
 
 

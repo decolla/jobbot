@@ -193,6 +193,17 @@ def applications_by_status(conn: sqlite3.Connection, *statuses: str) -> list[sql
     ).fetchall()
 
 
+def trackable_applications(conn: sqlite3.Connection) -> list[sqlite3.Row]:
+    """Candidaturas que podem receber e-mail do processo: enviadas ou talvez enviadas, e ainda sem recusa."""
+    return conn.execute(
+        """SELECT a.*, j.title, j.company, j.url, j.score, j.source, j.apply_path
+           FROM applications a JOIN jobs j ON j.id = a.job_id
+           WHERE a.status IN ('submitted', 'submit_uncertain', 'ready_manual')
+             AND NOT EXISTS (SELECT 1 FROM stages s WHERE s.application_id = a.id AND s.stage = 'rejected')
+           ORDER BY a.id"""
+    ).fetchall()
+
+
 def set_application_status(conn: sqlite3.Connection, app_id: int, status: str, reason: str | None = None) -> None:
     conn.execute(
         "UPDATE applications SET status = ?, reason = ?, updated_at = ? WHERE id = ?", (status, reason, _now(), app_id)
@@ -276,6 +287,10 @@ def add_action_item(conn: sqlite3.Connection, app_id: int, kind: str, title: str
     return cursor.lastrowid
 
 
+def get_action_item(conn: sqlite3.Connection, item_id: int) -> sqlite3.Row | None:
+    return conn.execute("SELECT * FROM action_items WHERE id = ?", (item_id,)).fetchone()
+
+
 def set_action_prep(conn: sqlite3.Connection, item_id: int, prep_path: str) -> None:
     conn.execute("UPDATE action_items SET prep_path = ? WHERE id = ?", (prep_path, item_id))
 
@@ -329,6 +344,10 @@ def recent_logs(conn: sqlite3.Connection, level: str, day: date) -> list[sqlite3
     return conn.execute(
         "SELECT * FROM logs WHERE level = ? AND substr(created_at, 1, 10) = ? ORDER BY id", (level, day.isoformat())
     ).fetchall()
+
+
+def message_seen(conn: sqlite3.Connection, message_id: str) -> bool:
+    return conn.execute("SELECT 1 FROM seen_messages WHERE message_id = ?", (message_id,)).fetchone() is not None
 
 
 def mark_message_seen(conn: sqlite3.Connection, message_id: str) -> bool:

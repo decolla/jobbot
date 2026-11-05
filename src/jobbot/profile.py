@@ -153,6 +153,18 @@ def project_root() -> Path:
     return Path(os.environ.get("JOBBOT_HOME") or Path(__file__).resolve().parents[2])
 
 
+def load_env(root: Path | None = None) -> dict[str, str]:
+    """Lê os segredos do .env. Variáveis de ambiente já definidas têm prioridade."""
+    values: dict[str, str] = {}
+    path = (root or project_root()) / ".env"
+    if path.exists():
+        for line in path.read_text(encoding="utf-8").splitlines():
+            key, sep, value = line.strip().partition("=")
+            if sep and not key.startswith("#"):
+                values[key.strip()] = value.strip().strip("\"'")
+    return {**values, **os.environ}
+
+
 def _load_yaml_model(path: Path, model: type[BaseModel]):
     if not path.exists():
         raise ConfigError(f"{path.name} não encontrado em {path.parent}")
