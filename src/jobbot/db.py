@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any
@@ -107,6 +109,18 @@ def connect(path: Path) -> sqlite3.Connection:
     conn.execute("PRAGMA foreign_keys = ON")
     conn.executescript(SCHEMA)
     return conn
+
+
+@contextmanager
+def transaction(conn: sqlite3.Connection) -> Iterator[None]:
+    """Agrupa várias gravações: muito mais rápido do que confirmar uma a uma, e tudo ou nada."""
+    conn.execute("BEGIN")
+    try:
+        yield
+    except BaseException:
+        conn.execute("ROLLBACK")
+        raise
+    conn.execute("COMMIT")
 
 
 def upsert_job(conn: sqlite3.Connection, job: Job) -> tuple[int, bool]:

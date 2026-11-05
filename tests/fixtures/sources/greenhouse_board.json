@@ -1,0 +1,153 @@
+{
+ "jobs": [
+  {
+   "absolute_url": "https://job-boards.greenhouse.io/stone/jobs/8196023003",
+   "data_compliance": [
+    {
+     "type": "gdpr",
+     "requires_consent": false,
+     "requires_processing_consent": false,
+     "requires_retention_consent": false,
+     "retention_period": null,
+     "demographic_data_consent_applies": false
+    }
+   ],
+   "education": "education_required",
+   "internal_job_id": 6040279003,
+   "location": {
+    "name": "Sao Paulo, Sao Paulo, Brasil"
+   },
+   "metadata": [
+    {
+     "id": 6090845003,
+     "name": "Estado:",
+     "value": null,
+     "value_type": "single_select"
+    }
+   ],
+   "id": 8196023003,
+   "updated_at": "2026-11-04T15:34:14-05:00",
+   "requisition_id": "SR0556360",
+   "title": "(VITTA) Analista Júnior de Atendimento (Benefícios) | Híbrido/SP",
+   "company_name": "Stone - Linkedin",
+   "first_published": "2026-11-04T15:34:14-05:00",
+   "language": "pt",
+   "application_deadline": null,
+   "content": "&lt;div class=&quot;content-intro&quot;&gt;&lt;h2&gt;&lt;strong&gt;Sobre a Stone:&lt;/strong&gt;&lt;/h2&gt;\n&lt;p&gt;Somos muito mais do que uma empresa de maquininhas! A Stone é uma empresa de tecnologia e serviços financeiros focada no(a) cliente.&lt;/p&gt;\n&lt;p&gt;Nascemos com o propósito de ser protagonistas na transformação da indústria de pagamentos, servindo o(a) empreendedor(a) brasileiro(a) e transformando seus sonhos em resultados.&lt;/p&gt;\n&lt;p&gt;Somos a maior empresa independente de meios de pagamentos do Brasil, com mais de quinze mil pessoas espalhadas pelas cinco regiões do país, &amp;nbsp;em um cenário repleto de desafios e oportunidades. Valorizamos o trabalho em equipe, a flexibilidade, o desenvolvimento contínuo e os pensamentos disruptivos e incansáveis na busca de soluções para a nossa RAZÃO.&lt;/p&gt;\n&lt;h2&gt;&lt;strong&gt;Nossa Cultura:&lt;/strong&gt;&lt;/h2&",
+   "departments": [
+    {
+     "id": 4010139003,
+     "name": "Financeiro",
+     "child_ids": [],
+     "parent_id": null
+    }
+   ],
+   "offices": [
+    {
+     "id": 4056990003,
+     "name": "STONE - BACKOFFICE",
+     "location": null,
+     "child_ids": [
+      4058297003,
+      4058701003,
+      4058702003,
+      4058703003,
+      4010127003,
+      4037287003,
+      4010140003,
+      4058374003,
+      4037280003,
+      4037217003,
+      4012291003,
+      4037230003,
+      4010121003,
+      4010124003,
+      4010141003,
+      4037299003,
+      4057078003
+     ],
+     "parent_id": 4036148003
+    }
+   ],
+   "ai_disclaimer": null,
+   "include_ai_disclaimer": false,
+   "ai_opt_out_request_url": "http://app3.greenhouse.io/ai_opt_out_request/job_post/8196023003/ai_opt_out"
+  },
+  {
+   "absolute_url": "https://job-boards.greenhouse.io/stone/jobs/8031733003",
+   "data_compliance": [
+    {
+     "type": "gdpr",
+     "requires_consent": false,
+     "requires_processing_consent": false,
+     "requires_retention_consent": false,
+     "retention_period": null,
+     "demographic_data_consent_applies": false
+    }
+   ],
+   "education": "education_optional",
+   "internal_job_id": 5902171003,
+   "location": {
+    "name": "Sao Paulo, Sao Paulo, Brasil"
+   },
+   "metadata": [
+    {
+     "id": 6090845003,
+     "name": "Estado:",
+     "value": null,
+     "value_type": "single_select"
+    }
+   ],
+   "id": 8031733003,
+   "updated_at": "2026-10-30T17:52:45-04:00",
+   "requisition_id": "SR0549151",
+   "title": "Analista de Auditoria Interna Sênior | Produtos Bancários e Contabilidade (Híbrido/SP)",
+   "company_name": "Stone - Linkedin",
+   "first_published": "2026-10-14T15:36:43-04:00",
+   "language": "pt",
+   "application_deadline": null,
+   "content": "&lt;div class=&quot;content-intro&quot;&gt;&lt;h2&gt;&lt;strong&gt;Sobre a Stone:&lt;/strong&gt;&lt;/h2&gt;\n&lt;p&gt;Somos muito mais do que uma empresa de maquininhas! A Stone é uma empresa de tecnologia e serviços financeiros focada no(a) cliente.&lt;/p&gt;\n&lt;p&gt;Nascemos com o propósito de ser protagonistas na transformação da indústria de pagamentos, servindo o(a) empreendedor(a) brasileiro(a) e transformando seus sonhos em resultados.&lt;/p&gt;\n&lt;p&gt;Somos a maior empresa independente de meios de pagamentos do Brasil, com mais de quinze mil pessoas espalhadas pelas cinco regiões do país, &amp;nbsp;em um cenário repleto de desafios e oportunidades. Valorizamos o trabalho em equipe, a flexibilidade, o desenvolvimento contínuo e os pensamentos disruptivos e incansáveis na busca de soluções para a nossa RAZÃO.&lt;/p&gt;\n&lt;h2&gt;&lt;strong&gt;Nossa Cultura:&lt;/strong&gt;&lt;/h2&",
+   "departments": [
+    {
+     "id": 4010139003,
+     "name": "Financeiro",
+     "child_ids": [],
+     "parent_id": null
+    }
+   ],
+   "offices": [
+    {
+     "id": 4056990003,
+     "name": "STONE - BACKOFFICE",
+     "location": null,
+     "child_ids": [
+      4058297003,
+      4058701003,
+      4058702003,
+      4058703003,
+      4010127003,
+      4037287003,
+      4010140003,
+      4058374003,
+      4037280003,
+      4037217003,
+      4012291003,
+      4037230003,
+      4010121003,
+      4010124003,
+      4010141003,
+      4037299003,
+      4057078003
+     ],
+     "parent_id": 4036148003
+    }
+   ],
+   "ai_disclaimer": null,
+   "include_ai_disclaimer": false,
+   "ai_opt_out_request_url": "http://app3.greenhouse.io/ai_opt_out_request/job_post/8031733003/ai_opt_out"
+  }
+ ],
+ "meta": {
+  "total": 2
+ }
+}

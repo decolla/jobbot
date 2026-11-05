@@ -34,10 +34,10 @@ salary_range:
   max: null
 
 keywords:
-  # A vaga precisa citar ao menos uma destas no título ou na descrição.
-  positive: [desenvolvedor, desenvolvimento, developer, software, programador, backend, frontend, fullstack, python, javascript, dados, engenharia de software, tecnologia, ti]
+  # A vaga passa se citar uma destas no título, ou se citar dois itens da sua stack na descrição.
+  positive: [desenvolvedor, desenvolvedora, desenvolvimento, developer, software, programador, programadora, backend, back-end, frontend, front-end, fullstack, full stack, dados, data, tecnologia, ti, qa, devops]
   # Citada no título, a vaga é descartada.
-  negative: [vendas, comercial, telemarketing, marketing, juridico, contabil, recursos humanos, pcd exclusiva]
+  negative: [vendas, comercial, telemarketing, marketing, juridico, contabil, recursos humanos]
 
 # Vagas que exigem mais anos de experiência do que isto são descartadas.
 max_years_required: 2

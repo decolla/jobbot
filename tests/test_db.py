@@ -120,6 +120,20 @@ def test_action_item_is_not_duplicated_for_same_stage_kind(conn):
     assert len(db.open_action_items(conn)) == 1
 
 
+def test_transaction_commits_on_success(conn):
+    with db.transaction(conn):
+        db.upsert_job(conn, _job())
+    assert conn.execute("SELECT COUNT(*) FROM jobs").fetchone()[0] == 1
+
+
+def test_transaction_rolls_back_on_error(conn):
+    with pytest.raises(RuntimeError):
+        with db.transaction(conn):
+            db.upsert_job(conn, _job())
+            raise RuntimeError("falhou")
+    assert conn.execute("SELECT COUNT(*) FROM jobs").fetchone()[0] == 0
+
+
 def test_connect_is_idempotent(tmp_path):
     path = tmp_path / "x.db"
     db.connect(path).close()

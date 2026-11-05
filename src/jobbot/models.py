@@ -14,7 +14,7 @@ Modality = Literal["remote", "hybrid", "onsite", "unknown"]
 
 TRACKING_PARAMS = {
     "trk", "trkinfo", "refid", "trackingid", "lipi", "midtoken", "midsig", "eid",
-    "otptoken", "ssid", "from", "tk", "gh_src", "source", "src", "ref",
+    "otptoken", "ssid", "from", "tk", "gh_src", "source", "src", "ref", "jobboardsource",
 }
 
 
@@ -55,6 +55,11 @@ class Job(BaseModel):
     source: str
     # "manual": o jobbot prepara o material, mas quem envia é o usuário (LinkedIn, Indeed, Gupy...).
     apply_path: Literal["form", "manual"] = "form"
+
+    @classmethod
+    def from_row(cls, row) -> "Job":
+        fields = ("title", "company", "location", "modality", "description", "url", "posted_at", "source", "apply_path")
+        return cls(**{name: row[name] for name in fields})
 
     @computed_field
     @property
