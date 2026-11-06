@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 CLASSIC = """
@@ -143,6 +144,36 @@ SLOW_COMBOBOX = """
 """
 
 JOB_PAGE = '<html><body><h1>Vaga</h1><p>Descrição</p><a href="/classic">Apply for this job</a></body></html>'
+# Candidatura em um clique: o botão envia sozinho, sem formulário.
+ONE_CLICK = """
+<html><body><h1>Vaga</h1>
+<button onclick="fetch('/one-click-apply', {method: 'POST'})">Candidatar-se</button>
+</body></html>
+"""
+SLOW_POSTS = {"/slow-submit": 0.8, "/very-slow-submit": 2.0}
+# Formulário comum com servidor lento: a resposta chega depois do tempo do clique.
+SLOW_NATIVE = """
+<html><body><form action="/very-slow-submit" method="post">
+  <label>Full name ✱ <input type="text" name="name" required></label>
+  <button type="submit">Enviar candidatura</button>
+</form></body></html>
+"""
+# Envio por JavaScript, como nos formulários React: o clique volta na hora e a resposta demora.
+# Um campo opcional já vem marcado como inválido antes do clique.
+PRE_INVALID = """
+<html><body><form id="f" action="/slow-submit" method="post">
+  <label>Full name ✱ <input type="text" name="name" required></label>
+  <label>Site <input type="text" name="site" aria-invalid="true"></label>
+  <button type="submit">Enviar candidatura</button>
+</form>
+<script>
+  document.getElementById('f').addEventListener('submit', async e => {
+    e.preventDefault();
+    await fetch('/slow-submit', {method: 'POST', body: new FormData(e.target)});
+    document.body.innerHTML = '<h1>Obrigado por se candidatar!</h1>';
+  });
+</script></body></html>
+"""
 VISIBLE_CAPTCHA = '<html><body><form><input name="name"><div class="g-recaptcha" style="width:304px;height:78px"></div></form></body></html>'
 HIDDEN_CAPTCHA = (
     '<html><body><form><input name="name"><div class="grecaptcha-badge" style="width:256px;height:60px"></div>'
@@ -178,6 +209,9 @@ class FormSite:
             "/card": CARD_QUESTION,
             "/combobox": COMBOBOX,
             "/job": JOB_PAGE,
+            "/one-click": ONE_CLICK,
+            "/pre-invalid": PRE_INVALID,
+            "/slow-native": SLOW_NATIVE,
             "/visible-captcha": VISIBLE_CAPTCHA,
             "/hidden-captcha": HIDDEN_CAPTCHA,
             "/cloudflare": CLOUDFLARE,
@@ -203,6 +237,7 @@ class FormSite:
             def do_POST(self):
                 body = self.rfile.read(int(self.headers.get("Content-Length", 0)))
                 site.posts.append((self.path, body))
+                time.sleep(SLOW_POSTS.get(self.path, 0))
                 self._send(200, site.responses.get(self.path, CONFIRMED))
 
             def log_message(self, *args):

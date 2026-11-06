@@ -167,6 +167,13 @@ def test_done_twice_fails(project, conn, capsys):
     assert main(["done", str(app_id)]) == 1
 
 
+def test_reject_refuses_application_being_sent(project, conn, capsys):
+    app_id = _add_application(conn, status="submitting")
+    assert main(["reject", str(app_id)]) == 1
+    assert db.get_application(conn, app_id)["status"] == "submitting"
+    assert "sendo enviada" in capsys.readouterr().err
+
+
 def test_reject_removes_from_queue_and_closes_action(project, conn):
     app_id = _add_application(conn, "pending_approval")
     db.add_action_item(conn, app_id, "form_blocked", "Parada")

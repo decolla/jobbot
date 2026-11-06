@@ -11,7 +11,7 @@ from typing import Literal
 from xml.etree import ElementTree
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 from pypdf import PdfReader
 from pypdf.errors import PyPdfError
 
@@ -70,6 +70,14 @@ class Documents(_Strict):
 class SavedAnswer(_Strict):
     match: str
     answer: str
+
+    @field_validator("match")
+    @classmethod
+    def _not_empty(cls, value: str) -> str:
+        # Um trecho vazio casaria com qualquer pergunta do formulário.
+        if not value.strip():
+            raise ValueError("match não pode ser vazio")
+        return value
 
 
 class Profile(_Strict):

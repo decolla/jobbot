@@ -13,7 +13,10 @@ def send_email(env: dict[str, str], to: str, subject: str, body: str, in_reply_t
     host, user, password = (env.get(key, "") for key in ("SMTP_HOST", "SMTP_USER", "SMTP_PASSWORD"))
     if not (host and user and password):
         raise ConfigError("SMTP não configurado: preencha SMTP_HOST, SMTP_USER e SMTP_PASSWORD no .env")
-    port = int(env.get("SMTP_PORT") or 587)
+    try:
+        port = int(env.get("SMTP_PORT") or 587)
+    except ValueError:
+        raise ConfigError(f"SMTP_PORT inválida no .env: {env['SMTP_PORT']}") from None
     message = EmailMessage()
     message["From"] = user
     message["To"] = to

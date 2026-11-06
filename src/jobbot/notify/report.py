@@ -45,14 +45,19 @@ def _news(conn: sqlite3.Connection, day: str) -> list[tuple[str, str, str]]:
     rows = conn.execute(
         """SELECT e.kind, e.payload_json, j.title, j.company FROM events e
            JOIN applications a ON a.id = e.application_id JOIN jobs j ON j.id = a.job_id
-           WHERE e.kind IN ('stage_detected', 'job_closed') AND substr(e.created_at, 1, 10) = ? ORDER BY e.id""",
+           WHERE e.kind IN ('stage_detected', 'stage_unverified', 'job_closed') AND substr(e.created_at, 1, 10) = ?
+           ORDER BY e.id""",
         (day,),
     ).fetchall()
     news = []
     for row in rows:
         payload = json.loads(row["payload_json"] or "{}")
-        stage = payload.get("stage", "job_closed") if row["kind"] == "stage_detected" else "job_closed"
-        news.append((STAGE_LABELS.get(stage, stage), f"{row['title']} ({row['company']})", payload.get("subject", "")))
+        stage = payload.get("stage", "job_closed") if row["kind"] != "job_closed" else "job_closed"
+        label = STAGE_LABELS.get(stage, stage)
+        if row["kind"] == "stage_unverified":
+            # Remetente fora da empresa e das plataformas de recrutamento: nada foi registrado.
+            label = f"{label}? confira o e-mail de {payload.get('from', '')}"
+        news.append((label, f"{row['title']} ({row['company']})", payload.get("subject", "")))
     return news
 
 

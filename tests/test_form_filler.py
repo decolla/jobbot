@@ -138,6 +138,30 @@ def test_open_form_follows_apply_link(page, site):
     assert inspect_form(page)
 
 
+def test_field_already_marked_invalid_does_not_hide_a_submission_in_flight(page, site):
+    # Campo opcional já vinha com aria-invalid; o envio está a caminho e a confirmação chega depois.
+    open_form(page, site.url("/pre-invalid"))
+    page.fill('[name="name"]', "Ana")
+    assert submit_form(page, timeout_ms=4000).status == "confirmed"
+    assert len(site.posts) == 1
+
+
+def test_slow_server_after_click_is_uncertain_never_invalid(page, site):
+    # O clique já disparou o envio; "inválido" deixaria a candidatura ser enviada de novo no retry.
+    open_form(page, site.url("/slow-native"))
+    page.fill('[name="name"]', "Ana")
+    assert submit_form(page, timeout_ms=1000).status == "uncertain"
+    page.wait_for_timeout(1500)
+    assert len(site.posts) == 1
+
+
+def test_open_form_never_clicks_buttons(page, site):
+    # Um botão "Candidatar-se" pode ser candidatura em um clique: em dry-run nada pode sair da máquina.
+    open_form(page, site.url("/one-click"))
+    page.wait_for_timeout(300)
+    assert site.posts == []
+
+
 def test_open_form_stays_when_there_is_no_apply_link(page, site):
     open_form(page, site.url("/no-form"))
     assert inspect_form(page) == []

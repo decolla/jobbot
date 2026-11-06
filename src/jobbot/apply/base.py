@@ -108,7 +108,7 @@ class Applier:
         try:
             self._prepare_form(app_id, row, "approval", summary, approved=True)
         except (PlaywrightError, LLMError, FabricationError) as exc:
-            self._block(app_id, row, _first_line(exc), summary)
+            self._fail(app_id, row, _first_line(exc), summary)
         finally:
             self._close_browser()
         return db.get_application(self.conn, app_id)["status"]
@@ -130,7 +130,7 @@ class Applier:
             else:
                 self._prepare_form(app_id, row, mode, summary)
         except (PlaywrightError, LLMError, FabricationError) as exc:
-            self._block(app_id, row, _first_line(exc), summary)
+            self._fail(app_id, row, _first_line(exc), summary)
 
     def _prepare_manual(self, app_id: int, row: sqlite3.Row, summary: ApplySummary) -> None:
         tailored = self._tailor(app_id, Job.from_row(row), [])
@@ -240,13 +240,26 @@ class Applier:
             db.log_event(self.conn, "application_submitted", application_id=app_id, job_id=row["id"], payload=self._audit(row, plan))
             summary.submitted += 1
         elif result.status == "uncertain":
-            reason = "o site não confirmou o envio; confira pelo link antes de tentar de novo"
-            db.set_application_status(self.conn, app_id, "submit_uncertain", reason)
-            db.add_action_item(self.conn, app_id, "submit_uncertain", f"Conferir envio: {row['title']}", link=row["url"])
-            db.log_event(self.conn, "application_submit_uncertain", application_id=app_id, job_id=row["id"], payload=self._audit(row, plan))
-            summary.uncertain += 1
+            self._uncertain(app_id, row, f"{result.detail}; confira pelo link antes de tentar de novo", summary,
+                            self._audit(row, plan))
         else:
             self._block(app_id, row, result.detail, summary, plan)
+
+    def _fail(self, app_id: int, row: sqlite3.Row, reason: str, summary: ApplySummary) -> None:
+        # Erro com a candidatura já reservada para envio: o clique pode ter acontecido. Bloquear permitiria
+        # um segundo envio no --retry-blocked; incerto nunca é repetido sozinho.
+        if db.get_application(self.conn, app_id)["status"] == "submitting":
+            self._uncertain(app_id, row, f"erro durante o envio ({reason}); confira pelo link", summary)
+        else:
+            self._block(app_id, row, reason, summary)
+
+    def _uncertain(self, app_id: int, row: sqlite3.Row, reason: str, summary: ApplySummary,
+                   payload: dict | None = None) -> None:
+        db.set_application_status(self.conn, app_id, "submit_uncertain", reason)
+        db.add_action_item(self.conn, app_id, "submit_uncertain", f"Conferir envio: {row['title']}", link=row["url"])
+        db.log_event(self.conn, "application_submit_uncertain", application_id=app_id, job_id=row["id"],
+                     payload=payload or {"reason": reason})
+        summary.uncertain += 1
 
     def _block(self, app_id: int, row: sqlite3.Row, reason: str, summary: ApplySummary, plan: FillPlan | None = None,
                tailored: Tailored | None = None) -> None:
@@ -344,6 +357,8 @@ def reject_application(conn: sqlite3.Connection, app_id: int) -> None:
         raise ConfigError(f"candidatura {app_id} não existe")
     if app["status"] == "submitted":
         raise ConfigError(f"candidatura {app_id} já foi enviada")
+    if app["status"] == "submitting":
+        raise ConfigError(f"candidatura {app_id} está sendo enviada agora; espere terminar")
     db.set_application_status(conn, app_id, "rejected_by_user")
     db.complete_action_items(conn, app_id, ["form_blocked", "submit_uncertain"])
     db.log_event(conn, "application_rejected_by_user", application_id=app_id, job_id=app["job_id"])

@@ -82,46 +82,46 @@ def _stages(conn, app_id):
 
 def test_match_by_sender_domain(conn):
     _submitted(conn)
-    apps = db.applications_by_status(conn, "submitted")
+    apps = db.trackable_applications(conn)
     assert match_application(_message(sender="rh@acme.com"), apps)["company"] == "Acme"
 
 
 def test_match_by_company_in_subject(conn):
     _submitted(conn)
-    apps = db.applications_by_status(conn, "submitted")
+    apps = db.trackable_applications(conn)
     message = _message(subject="Sua candidatura na Acme", sender="no-reply@greenhouse.io")
     assert match_application(message, apps)["company"] == "Acme"
 
 
 def test_match_ignores_accents_and_punctuation(conn):
     _submitted(conn, company="Companhia Ótima S.A.")
-    apps = db.applications_by_status(conn, "submitted")
+    apps = db.trackable_applications(conn)
     message = _message(text="candidatura na companhia otima sa", sender="x@ats.io")
     assert match_application(message, apps) is not None
 
 
 def test_unrelated_message_does_not_match(conn):
     _submitted(conn)
-    apps = db.applications_by_status(conn, "submitted")
+    apps = db.trackable_applications(conn)
     assert match_application(_message(subject="Promoção", text="Oferta", sender="news@loja.com"), apps) is None
 
 
 def test_company_name_must_be_a_whole_word(conn):
     _submitted(conn, company="Neon")
-    apps = db.applications_by_status(conn, "submitted")
+    apps = db.trackable_applications(conn)
     assert match_application(_message(text="luz de neonatal", sender="x@ats.io"), apps) is None
 
 
 def test_job_without_company_name_never_matches(conn):
     _submitted(conn, company="")
-    apps = db.applications_by_status(conn, "submitted")
+    apps = db.trackable_applications(conn)
     assert match_application(_message(text="Recebemos sua candidatura", sender="x@ats.io"), apps) is None
 
 
 def test_ambiguous_company_uses_job_title(conn):
     _submitted(conn, title="Estágio Dados", n=1)
     _submitted(conn, title="Estágio Backend", n=2)
-    apps = db.applications_by_status(conn, "submitted")
+    apps = db.trackable_applications(conn)
     match = match_application(_message(text="Sua candidatura para Estágio Backend na Acme"), apps)
     assert match["title"] == "Estágio Backend"
 
@@ -129,7 +129,7 @@ def test_ambiguous_company_uses_job_title(conn):
 def test_ambiguous_without_title_does_not_guess(conn):
     _submitted(conn, title="Estágio Dados", n=1)
     _submitted(conn, title="Estágio Backend", n=2)
-    apps = db.applications_by_status(conn, "submitted")
+    apps = db.trackable_applications(conn)
     assert match_application(_message(text="Sua candidatura na Acme"), apps) is None
 
 
@@ -286,7 +286,90 @@ def test_without_tracked_applications_the_inbox_is_not_read(conn, project):
     assert _stages(conn, app_id) == []
 
 
-def test_rejected_application_is_no_longer_tracked(conn, project):
+def test_rejected_application_still_receives_later_news(conn, project):
+    # Uma recusa detectada por engano não pode esconder a entrevista que vem depois.
+    app_id = _submitted(conn)
+    _track(conn, project, FakeMailbox(_message(text="Infelizmente não seguiremos", message_id="<1@x>")))
+    _track(conn, project, FakeMailbox(_message(text="Queremos agendar uma entrevista", message_id="<2@x>")))
+    assert _stages(conn, app_id) == ["applied", "rejected", "interview"]
+
+
+def test_unverified_sender_changes_nothing_and_is_flagged_once(conn, project):
+    # Só o nome da empresa no texto (newsletter, golpe, recrutador de outro domínio): o usuário confere.
+    app_id = _submitted(conn)
+    llm = FakeLLM()
+    mailbox = FakeMailbox(_message(text="Sou da Acme e queremos agendar uma entrevista", sender="recrutadora@gmail.com"))
+    _track(conn, project, mailbox, llm)
+    _track(conn, project, mailbox, llm)
+    assert _stages(conn, app_id) == ["applied"]
+    assert db.open_action_items(conn) == []
+    assert llm.prompts == []
+    events = db.get_events(conn, "stage_unverified")
+    assert len(events) == 1
+    assert (events[0]["payload"]["stage"], events[0]["payload"]["from"]) == ("interview", "recrutadora@gmail.com")
+
+
+def _ready_manual(conn):
+    job_id, _ = db.upsert_job(conn, Job(title="Estágio", company="Acme", url="https://www.linkedin.com/jobs/view/1",
+                                        source="linkedin", apply_path="manual"))
+    app_id = db.create_application(conn, job_id, "manual")
+    db.set_application_status(conn, app_id, "ready_manual")
+    return app_id
+
+
+def test_unverified_sender_never_confirms_manual_application(conn, project):
+    app_id = _ready_manual(conn)
+    _track(conn, project, FakeMailbox(_message(text="Acme: recebemos sua candidatura", sender="news@blog.com")))
+    assert db.get_application(conn, app_id)["status"] == "ready_manual"
+
+
+def test_recruiting_platform_sender_is_trusted(conn, project):
+    app_id = _ready_manual(conn)
+    _track(conn, project, FakeMailbox(_message(text="Recebemos sua candidatura na Acme", sender="no-reply@gupy.io")))
+    assert db.get_application(conn, app_id)["status"] == "submitted"
+
+
+def test_job_alert_emails_are_not_tracked(conn, project):
+    app_id = _submitted(conn)
+    llm = FakeLLM()
+    alert = _message(text="Acme está contratando. Dicas de entrevista", sender="jobalerts-noreply@linkedin.com")
+    _track(conn, project, FakeMailbox(alert), llm)
+    assert llm.prompts == []
+    assert _stages(conn, app_id) == ["applied"]
+
+
+def test_failed_record_leaves_message_for_next_run(conn, project, monkeypatch):
+    import sqlite3
+
+    app_id = _submitted(conn)
+    original, failures = db.add_stage, []
+
+    def locked_once(*args, **kwargs):
+        if not failures:
+            failures.append(1)
+            raise sqlite3.OperationalError("database is locked")
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(db, "add_stage", locked_once)
+    message = _message(text="Queremos agendar uma entrevista")
+    assert _track(conn, project, FakeMailbox(message)).errors == 1
+    _track(conn, project, FakeMailbox(message))
+    assert _stages(conn, app_id) == ["applied", "interview"]
+    assert len(db.get_events(conn, "stage_detected")) == 1
+
+
+def test_prep_file_failure_keeps_action_and_continues(conn, project, monkeypatch):
+    def disk_full(*args, **kwargs):
+        raise OSError("disco cheio")
+
+    monkeypatch.setattr("jobbot.tracking.status_checker.write_prep", disk_full)
+    _submitted(conn)
+    _track(conn, project, FakeMailbox(_message(text="Faça o teste online")))
+    assert db.open_action_items(conn)[0]["prep_path"] is None
+    assert "disco cheio" in conn.execute("SELECT message FROM logs WHERE level = 'error'").fetchone()["message"]
+
+
+def test_rejected_application_loses_ties_with_active_one(conn, project):
     first = _submitted(conn, title="Estágio Dados", n=1)
     second = _submitted(conn, title="Estágio Backend", n=2)
     _track(conn, project, FakeMailbox(_message(text="Estágio Dados: infelizmente não seguiremos", message_id="<1@x>")))
@@ -392,6 +475,16 @@ def test_auto_reply_without_availability_does_not_answer(project):
     profile = load_profile(project)
     profile.availability = ""
     assert plan_reply(_message(text="Qual a sua disponibilidade?"), profile, "Estágio", None) is None
+
+
+def test_auto_reply_only_to_the_company_own_domain(conn, project):
+    # Plataforma de recrutamento é confiável para registrar etapas, mas resposta só vai para a empresa.
+    _enable_auto_reply(project)
+    _submitted(conn)
+    send = _Replies()
+    message = _message(text="Você ainda tem interesse na vaga da Acme?", sender="recrutamento@inhire.app")
+    _track(conn, project, FakeMailbox(message), send=send)
+    assert send.sent == []
 
 
 def test_auto_reply_never_answers_no_reply_address(project):

@@ -35,6 +35,14 @@ HIRING_CONTEXT = re.compile(
     r"candidat|vaga|processo seletivo|recrut|selecao|seletiv|entrevista|estagio|oportunidade"
     r"|application|applied|applying|position|recruit|hiring|interview|talent"
 )
+# Plataformas que enviam e-mails de processo seletivo em nome das empresas.
+RECRUITING_DOMAINS = (
+    "gupy.io", "gupy.com.br", "greenhouse.io", "greenhouse-mail.io", "lever.co", "myworkday.com", "workday.com",
+    "smartrecruiters.com", "ashbyhq.com", "teamtailor.com", "teamtailor-mail.com", "breezy.hr", "recruitee.com",
+    "workable.com", "workablemail.com", "jobvite.com", "icims.com", "bamboohr.com", "kenoby.com", "solides.com.br",
+    "solides.jobs", "inhire.com.br", "inhire.app", "recrutei.com.br", "pandape.com.br", "vagas.com.br",
+    "programathor.com.br", "linkedin.com", "indeed.com", "indeedemail.com",
+)
 
 SYSTEM = (
     "Você classifica e-mails que um candidato recebe durante processos seletivos. "
@@ -54,6 +62,7 @@ class TrackSummary:
     actions: int = 0
     unmatched: int = 0
     ambiguous: int = 0
+    unverified: int = 0
     confirmed: int = 0
     replies: int = 0
     errors: int = 0
@@ -68,21 +77,45 @@ def _contains(haystack: str, phrase: str) -> bool:
     return bool(phrase) and re.search(rf"\b{re.escape(phrase)}\b", haystack) is not None
 
 
+def _company(app: sqlite3.Row) -> str:
+    return LEGAL_SUFFIX.sub("", _normalize(app["company"]))
+
+
+def _sender_domain(message: Message) -> str:
+    return message.sender_address.rpartition("@")[2]
+
+
+def _from_company(message: Message, app: sqlite3.Row) -> bool:
+    return _company(app).replace(" ", "") in set(_sender_domain(message).split("."))
+
+
+def sender_trust(message: Message, app: sqlite3.Row) -> str | None:
+    """"company": domínio da própria empresa. "platform": plataforma de recrutamento conhecida.
+    None: qualquer outro remetente, que só cita a empresa no texto (newsletter, golpe, recrutador externo)."""
+    if _from_company(message, app):
+        return "company"
+    domain = _sender_domain(message)
+    if any(domain == known or domain.endswith("." + known) for known in RECRUITING_DOMAINS):
+        return "platform"
+    return None
+
+
 def find_candidates(message: Message, apps: list[sqlite3.Row]) -> list[sqlite3.Row]:
     """Candidaturas a que o e-mail pode se referir: pela empresa no remetente ou no texto, e pelo título."""
     haystack = _normalize(f"{message.subject}\n{message.text}")
-    domain_labels = set(message.sender_address.rpartition("@")[2].split("."))
     by_domain, by_name = [], []
     for app in apps:
-        company = LEGAL_SUFFIX.sub("", _normalize(app["company"]))
+        company = _company(app)
         if len(company) < 2:
             continue
-        if company.replace(" ", "") in domain_labels:
+        if _from_company(message, app):
             by_domain.append(app)
         elif _contains(haystack, company):
             by_name.append(app)
     candidates = by_domain or by_name
     if len(candidates) > 1:
+        # Recusada perde o desempate para a ativa; depois, o título da vaga no texto decide.
+        candidates = [app for app in candidates if not app["rejected"]] or candidates
         titled = [app for app in candidates if _contains(haystack, _normalize(app["title"]))]
         candidates = titled or candidates
     return candidates
@@ -112,10 +145,12 @@ class _Tracker:
         self.today = today
         self.summary = TrackSummary()
         self.llm_failures = 0
+        alerts = settings.sources.get("email_alerts")
+        self.alert_senders = {sender.lower() for sender in (getattr(alerts, "senders", None) or [])}
 
     def process(self, message: Message, apps: list[sqlite3.Row]) -> None:
-        if db.message_seen(self.conn, message.message_id):
-            return
+        if db.message_seen(self.conn, message.message_id) or message.sender_address in self.alert_senders:
+            return  # alerta de vagas novas não é notícia de processo seletivo
         self.summary.messages += 1
         candidates = find_candidates(message, apps)
         guess = classify(message.subject, message.text)
@@ -123,6 +158,10 @@ class _Tracker:
             self._unmatched(message, candidates, guess is not None)
             return
         app = candidates[0]
+        trust = sender_trust(message, app)
+        if trust is None:
+            self._unverified(message, app, guess.stage if guess else None)
+            return
         stage = guess.stage if guess else None
         if stage is None and HIRING_CONTEXT.search(_normalize(f"{message.subject} {message.text}")):
             if self.llm_failures >= MAX_LLM_FAILURES:
@@ -138,11 +177,27 @@ class _Tracker:
                 return
             self.llm_failures = 0
             stage = None if answer.stage == "none" else answer.stage
+        try:
+            if stage:
+                self._record(app, stage, message)
+        except Exception as exc:  # um e-mail com problema não derruba o acompanhamento dos outros
+            self.summary.errors += 1
+            db.log(self.conn, "error", "track", f'"{message.subject}": {type(exc).__name__}: {exc}')
+            return  # sem marcar como visto: a próxima execução tenta de novo
         db.mark_message_seen(self.conn, message.message_id)
-        if stage:
-            self._record(app, stage, message)
-        if self.settings.auto_reply.enabled:
+        # Resposta só para o domínio da própria empresa: o remetente de um e-mail pode ser forjado.
+        if self.settings.auto_reply.enabled and trust == "company":
             self._auto_reply(app, stage, message)
+
+    def _unverified(self, message: Message, app: sqlite3.Row, stage: str | None) -> None:
+        """Remetente que só cita a empresa: nada muda sozinho e o e-mail nem vai ao Claude."""
+        if stage is None:
+            self.summary.unmatched += 1
+            return
+        self.summary.unverified += 1
+        db.mark_message_seen(self.conn, message.message_id)
+        db.log_event(self.conn, "stage_unverified", application_id=app["id"], job_id=app["job_id"],
+                     payload={"stage": stage, "subject": message.subject, "from": message.sender_address})
 
     def _unmatched(self, message: Message, candidates: list[sqlite3.Row], looks_like_hiring: bool) -> None:
         if not (candidates and looks_like_hiring):
@@ -165,12 +220,14 @@ class _Tracker:
             db.log_event(self.conn, "submission_confirmed_by_email", application_id=app_id, job_id=app["job_id"],
                          payload={"subject": message.subject, "from": message.sender_address})
             self.summary.confirmed += 1
+        stages = db.get_stages(self.conn, app_id)
+        changed = not stages or stages[-1]["stage"] != stage
+        if changed:
+            db.add_stage(self.conn, app_id, stage, "email", detail=message.subject, occurred_at=message.date or None)
         db.log_event(self.conn, "stage_detected", application_id=app_id, job_id=app["job_id"],
                      payload={"stage": stage, "subject": message.subject, "from": message.sender_address})
-        stages = db.get_stages(self.conn, app_id)
-        if stages and stages[-1]["stage"] == stage:
+        if not changed:
             return
-        db.add_stage(self.conn, app_id, stage, "email", detail=message.subject, occurred_at=message.date or None)
         self.summary.stage_changes += 1
         if stage == "rejected":
             db.complete_action_items(self.conn, app_id, CLOSED_BY_REJECTION)
@@ -188,10 +245,11 @@ class _Tracker:
         try:
             material = self.llm.ask(build_prep_prompt(kind, job, message.text, self.profile.stack), PrepMaterial,
                                     model=self.settings.llm.writing_model, system=PREP_SYSTEM)
-        except LLMError as exc:
+            path = write_prep(self.root, item_id, kind, job, material, item["due_date"], item["link"])
+        except (LLMError, OSError) as exc:
+            # A pendência já está registrada; sem o material ela continua valendo.
             db.log(self.conn, "error", "track.prep", f"material de preparação para {job.title}: {exc}")
             return
-        path = write_prep(self.root, item_id, kind, job, material, item["due_date"], item["link"])
         db.set_action_prep(self.conn, item_id, path)
 
     def _auto_reply(self, app: sqlite3.Row, stage: str | None, message: Message) -> None:

@@ -100,6 +100,18 @@ def test_submissions_today_counts_only_today(conn):
     assert db.submissions_on(conn, now.date()) == 1
 
 
+def test_submissions_today_count_attempts_that_may_have_gone_out(conn):
+    # Envio incerto pode ter chegado: conta no limite do dia, para o modo auto não passar dele.
+    job_id, _ = db.upsert_job(conn, _job())
+    app_id = db.create_application(conn, job_id, "auto")
+    db.claim_for_submission(conn, app_id)
+    db.log_event(conn, "application_submit_attempt", application_id=app_id, job_id=job_id)
+    db.set_application_status(conn, app_id, "submit_uncertain")
+    assert db.submissions_on(conn, datetime.now().date()) == 1
+    db.mark_submitted(conn, app_id)
+    assert db.submissions_on(conn, datetime.now().date()) == 1
+
+
 def test_event_payload_round_trips_and_is_auditable(conn):
     db.log_event(conn, "application_submitted", application_id=None, payload={"email": "a@b.c"})
     event = db.get_events(conn, "application_submitted")[0]

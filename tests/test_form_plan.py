@@ -222,6 +222,21 @@ def test_answer_matching_option_uses_the_option_text():
     assert _value(plan, label) == "Avançado"
 
 
+def test_card_number_field_never_gets_the_cover_letter():
+    plan = _plan(_field("Número do cartão", required=False), cover_letter="Minha carta")
+    assert _value(plan, "Número do cartão") is None
+
+
+@pytest.mark.parametrize(
+    "label",
+    ["Quanto você espera ganhar?", "Expected pay", "Desired hourly rate", "Qual sua expectativa de bolsa?"],
+)
+def test_other_salary_phrasings_also_block(label):
+    plan = _plan(_field(label))
+    assert any("pretensão salarial" in blocker for blocker in plan.blockers)
+    assert plan.questions == []
+
+
 def test_cover_letter_textarea_receives_the_letter():
     plan = _plan(_field("Carta de apresentação", kind="textarea", required=False), cover_letter="Olá")
     assert _value(plan, "Carta de apresentação") == "Olá"

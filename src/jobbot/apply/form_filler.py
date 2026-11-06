@@ -25,6 +25,7 @@ CONFIRMATION = re.compile(
     r"application (has been |was )?(submitted|received)|recebemos sua candidatura|inscricao (enviada|realizada|concluida)"
 )
 CONFIRMATION_URL = re.compile(r"/(confirmation|thanks|thank-you|obrigado)\b", re.IGNORECASE)
+INVALID_FIELDS = '[aria-invalid="true"]:visible'
 
 OBSTACLE_JS = r"""
 () => {
@@ -183,7 +184,8 @@ def open_form(page: Page, url: str) -> None:
     _settle(page)
     if page.locator('input:visible:not([type="hidden"]), textarea:visible, select:visible').count():
         return
-    link = page.locator("a:visible, button:visible").filter(has_text=APPLY_LINK).first
+    # Só links: um botão "Candidatar-se" pode ser candidatura em um clique, e abrir a página não pode enviar nada.
+    link = page.locator("a[href]:visible").filter(has_text=APPLY_LINK).first
     if link.count():
         link.click(timeout=10000)
         page.wait_for_load_state("domcontentloaded", timeout=30000)
@@ -284,15 +286,22 @@ def submit_form(page: Page, timeout_ms: int = 20000) -> SubmitResult:
     if button is None:
         return SubmitResult("invalid", "botão de envio não encontrado")
     already_confirmed = CONFIRMATION.search(_body_text(page)) is not None
+    invalid_before = page.locator(INVALID_FIELDS).count()
     start_url = page.url
     try:
-        button.click(timeout=5000)
+        # no_wait_after: o clique volta assim que é feito. Esperar a navegação aqui faria um servidor lento
+        # estourar o tempo depois do envio já ter saído, e o envio pareceria nunca ter acontecido.
+        button.click(timeout=min(5000, timeout_ms), no_wait_after=True)
     except PlaywrightError as exc:
         return SubmitResult("invalid", f"não foi possível clicar em enviar: {str(exc).splitlines()[0]}")
 
+    # Daqui em diante o envio pode ter saído: na dúvida, o resultado é "uncertain", nunca algo que permita repetir.
     deadline = time.monotonic() + timeout_ms / 1000
     while time.monotonic() < deadline:
-        page.wait_for_timeout(250)
+        try:
+            page.wait_for_timeout(250)
+        except PlaywrightError:
+            return SubmitResult("uncertain", "a página fechou depois do clique em enviar")
         try:
             if page.url != start_url and CONFIRMATION_URL.search(page.url):
                 return SubmitResult("confirmed")
@@ -300,7 +309,8 @@ def submit_form(page: Page, timeout_ms: int = 20000) -> SubmitResult:
                 return SubmitResult("confirmed")
             if detect_obstacle(page) == "captcha":
                 return SubmitResult("captcha", "o site pediu CAPTCHA depois do envio")
-            if page.locator('[aria-invalid="true"]:visible').count():
+            # Campo que já estava inválido antes do clique não diz nada: só conta marcação nova.
+            if page.locator(INVALID_FIELDS).count() > invalid_before:
                 return SubmitResult("invalid", "o formulário apontou campos inválidos")
         except PlaywrightError:
             continue  # A página está navegando; a próxima volta lê o novo conteúdo.

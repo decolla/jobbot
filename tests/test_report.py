@@ -128,6 +128,15 @@ def test_process_news_lists_stages_detected_today(conn, project):
     assert "Estágio Dev 1 (Acme)" in text
 
 
+def test_unverified_news_asks_the_user_to_check(conn, project):
+    app_id = _app(conn, 1, "submitted")
+    db.log_event(conn, "stage_unverified", application_id=app_id,
+                 payload={"stage": "interview", "subject": "Convite", "from": "x@gmail.com"})
+    text = _report(conn, project)
+    assert "Entrevista?" in text
+    assert "x@gmail.com" in text
+
+
 def test_new_approved_jobs_are_listed_with_score(conn, project):
     _job(conn, 1, score=85, status="scored")
     _job(conn, 2, score=40, status="low_score")

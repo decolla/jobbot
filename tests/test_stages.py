@@ -45,6 +45,18 @@ def test_steps_that_may_happen_later_do_not_count():
     assert guess.stage == "screening"
 
 
+@pytest.mark.parametrize(
+    "body",
+    [
+        "Thank you for applying. If you are not selected, we will keep your resume on file.",
+        "Recebemos sua candidatura. Caso você não seja selecionado, manteremos seu currículo.",
+        "Recebemos sua candidatura. Se você não for aprovado, avisaremos por e-mail.",
+    ],
+)
+def test_conditional_not_selected_is_not_a_rejection(body):
+    assert classify("Candidatura", body).stage == "screening"
+
+
 def test_invitation_with_pode_still_counts():
     assert classify("Próxima etapa", "Você pode fazer o teste online até sexta").stage == "test"
 

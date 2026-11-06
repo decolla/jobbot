@@ -17,7 +17,10 @@ from jobbot.profile import Profile
 if TYPE_CHECKING:
     from jobbot.apply.text_tailor import QuestionAnswer
 
-SALARY = re.compile(r"salar|pretensao|remuneracao|compensation|pay expectation|\bwage")
+SALARY = re.compile(
+    r"salar|pretensao|remuneracao|compensation|pay expectation|\bwage|expected pay|desired pay|hourly rate"
+    r"|(espera|deseja|pretende|gostaria de) (ganhar|receber)|expectativa de (bolsa|ganho)|valor da bolsa"
+)
 SENSITIVE = re.compile(
     r"\bcpf\b|\brg\b|\bcnh\b|passaporte|passport|nascimento|birth|\bidade\b|\bage\b|endereco|address|\bcep\b|zip code|"
     r"genero|gender|\bsexo\b|sexual|\braca\b|\bcor\b|etnia|\brace\b|ethnic|deficien|disabil|\bpcd\b|saude|health|"
@@ -109,7 +112,7 @@ def _known_value(item: FormField, label: str, key: str, profile: Profile) -> str
 
 def _plan_file(item: FormField, label: str, key: str, plan: FillPlan, resume_path: Path, cover_letter_path: Path | None) -> None:
     both = f"{label} {key}"
-    if re.search(r"cover|carta", both):
+    if re.search(r"cover|\bcarta\b", both):
         if cover_letter_path:
             plan.actions.append(FillAction(item.key, item.kind, item.label, str(cover_letter_path), "carta"))
         elif not item.required:
@@ -170,7 +173,7 @@ def plan_fill(fields: list[FormField], profile: Profile, resume_path: Path, cove
         if not label:
             _leave_blank_or_block(item, plan, f"campo obrigatório sem rótulo: {item.key}")
             continue
-        if re.search(r"carta|cover letter", label):
+        if re.search(r"\bcarta\b|cover letter", label):
             if cover_letter:
                 plan.actions.append(FillAction(item.key, item.kind, item.label, cover_letter, "carta"))
             continue

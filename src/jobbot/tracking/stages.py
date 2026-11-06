@@ -40,9 +40,9 @@ PATTERNS = [
 
 # Frases sobre etapas que talvez aconteçam ("o processo pode incluir teste") não são convite.
 HYPOTHETICAL = re.compile(
-    r"pode(m|ra|rao)? (incluir|envolver|contemplar|ter|haver)|caso (voce )?(seja|avance|passe)"
-    r"|\bse (voce )?(for|seja|passar|avancar) |(may|might|could) (include|involve)"
-    r"|if (you are |you're )?(selected|shortlisted|successful)|eventualmente"
+    r"pode(m|ra|rao)? (incluir|envolver|contemplar|ter|haver)|caso (voce )?(nao )?(seja|avance|passe)"
+    r"|\bse (voce )?(nao )?(for|seja|passar|avancar) |(may|might|could) (include|involve)"
+    r"|if (you are |you're |you were )?(not )?(selected|shortlisted|successful)|eventualmente"
 )
 
 

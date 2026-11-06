@@ -47,6 +47,14 @@ def test_settings_reject_unknown_mode(project):
         load_settings(project)
 
 
+@pytest.mark.parametrize("match", ["", "   "])
+def test_saved_answer_with_empty_match_is_rejected(project, match):
+    # Um trecho vazio casaria com qualquer pergunta do formulário.
+    _edit_yaml(project / "config/profile.yaml", lambda d: d.update(saved_answers=[{"match": match, "answer": "Não"}]))
+    with pytest.raises(ConfigError, match="match"):
+        load_profile(project)
+
+
 def test_settings_reject_misspelled_key(project):
     _edit_yaml(project / "config/settings.yaml", lambda d: d.update(daily_limit=5))
     with pytest.raises(ConfigError, match="daily_limit"):

@@ -52,6 +52,11 @@ def test_message_has_headers_and_body():
     assert "Olá, confirmo." in message.get_content()
 
 
+def test_invalid_port_is_config_error():
+    with pytest.raises(ConfigError, match="SMTP_PORT"):
+        send_email({**ENV, "SMTP_PORT": "abc"}, "rh@acme.com", "Assunto", "Corpo", smtp_factory=FakeSMTP)
+
+
 def test_missing_smtp_settings_is_config_error():
     with pytest.raises(ConfigError, match="SMTP"):
         send_email({}, "rh@acme.com", "Assunto", "Corpo", smtp_factory=FakeSMTP)

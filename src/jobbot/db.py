@@ -194,12 +194,15 @@ def applications_by_status(conn: sqlite3.Connection, *statuses: str) -> list[sql
 
 
 def trackable_applications(conn: sqlite3.Connection) -> list[sqlite3.Row]:
-    """Candidaturas que podem receber e-mail do processo: enviadas ou talvez enviadas, e ainda sem recusa."""
+    """Candidaturas que podem receber e-mail do processo: enviadas ou talvez enviadas.
+
+    As já recusadas continuam na lista (uma recusa detectada por engano não pode esconder o resto do
+    processo), marcadas em `rejected` para perderem o desempate para as ativas."""
     return conn.execute(
-        """SELECT a.*, j.title, j.company, j.url, j.score, j.source, j.apply_path
+        """SELECT a.*, j.title, j.company, j.url, j.score, j.source, j.apply_path,
+                  EXISTS (SELECT 1 FROM stages s WHERE s.application_id = a.id AND s.stage = 'rejected') AS rejected
            FROM applications a JOIN jobs j ON j.id = a.job_id
            WHERE a.status IN ('submitted', 'submit_uncertain', 'ready_manual')
-             AND NOT EXISTS (SELECT 1 FROM stages s WHERE s.application_id = a.id AND s.stage = 'rejected')
            ORDER BY a.id"""
     ).fetchall()
 
@@ -238,10 +241,14 @@ def mark_submitted(conn: sqlite3.Connection, app_id: int, when: datetime | None 
 
 
 def submissions_on(conn: sqlite3.Connection, day: date) -> int:
-    """Envios feitos pelo jobbot no dia. O que o usuário enviou à mão não consome o limite."""
+    """Envios feitos pelo jobbot no dia, incluindo tentativas de resultado incerto, que podem ter chegado.
+    O que o usuário enviou à mão não consome o limite."""
     row = conn.execute(
-        "SELECT COUNT(*) FROM applications WHERE substr(submitted_at, 1, 10) = ? AND mode != 'manual'",
-        (day.isoformat(),),
+        """SELECT COUNT(*) FROM applications a
+           WHERE (substr(a.submitted_at, 1, 10) = ? AND a.mode != 'manual')
+              OR EXISTS (SELECT 1 FROM events e WHERE e.application_id = a.id
+                         AND e.kind = 'application_submit_attempt' AND substr(e.created_at, 1, 10) = ?)""",
+        (day.isoformat(), day.isoformat()),
     ).fetchone()
     return row[0]
 

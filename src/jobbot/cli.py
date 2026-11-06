@@ -170,7 +170,8 @@ def cmd_track(args: argparse.Namespace) -> int:
                 print(
                     f"E-mails novos: {summary.messages} | etapas registradas: {summary.stage_changes} | "
                     f"pendências criadas: {summary.actions} | envios confirmados: {summary.confirmed} | "
-                    f"respostas automáticas: {summary.replies} | ambíguos: {summary.ambiguous} | erros: {summary.errors}"
+                    f"respostas automáticas: {summary.replies} | para conferir: {summary.ambiguous + summary.unverified} | "
+                    f"erros: {summary.errors}"
                 )
         else:
             print("Acompanhamento por e-mail desligado (tracking.email em settings.yaml).")

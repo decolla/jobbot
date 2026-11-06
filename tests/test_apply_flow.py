@@ -319,6 +319,26 @@ def test_uncertain_submission_is_flagged_and_never_retried(conn, real_project, s
     assert len(site.posts) == 1
 
 
+def test_browser_failure_after_click_is_uncertain_and_never_retried(conn, real_project, site, monkeypatch):
+    from playwright.sync_api import Error as PlaywrightError
+
+    from jobbot.apply import form_filler
+
+    def click_then_crash(page, timeout_ms=0):
+        form_filler._find_submit_button(page).click()
+        page.wait_for_load_state()
+        raise PlaywrightError("Target page, context or browser has been closed")
+
+    job_id = _add_job(conn, site.url("/simple"))
+    monkeypatch.setattr("jobbot.apply.base.submit_form", click_then_crash)
+    _applier(conn, real_project).run("auto")
+    monkeypatch.undo()
+    assert _application(conn, job_id)["status"] == "submit_uncertain"
+    assert db.open_action_items(conn)[0]["kind"] == "submit_uncertain"
+    _applier(conn, real_project).run("auto", retry_blocked=True)
+    assert len(site.posts) == 1
+
+
 def test_invalid_submission_blocks_and_can_be_retried(conn, real_project, site):
     job_id = _add_job(conn, site.url("/classic-invalid"))
     answers = _tailored(_classic_answers())

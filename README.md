@@ -130,6 +130,10 @@ O relatório lista cada candidatura parada e o motivo:
   nem marcar como lido. Associa cada e-mail a uma candidatura pela empresa no remetente ou no texto. Na dúvida
   entre duas candidaturas, avisa em vez de adivinhar.
 
+Só e-mails do domínio da empresa ou de plataformas de recrutamento conhecidas (Gupy, Greenhouse, Lever, LinkedIn,
+Indeed e outras) registram etapas. Um remetente qualquer que só cita a empresa, como uma newsletter, um recrutador
+com e-mail pessoal ou um golpe, não muda nada: o e-mail aparece no relatório para você conferir.
+
 Etapas reconhecidas: em análise, teste, vídeo, entrevista, proposta e recusa. Um e-mail só vai ao Claude se citar
 a empresa de uma candidatura e falar de seleção, e vai sem e-mails e telefones. A fatura de uma empresa em que você
 também é cliente, por exemplo, não sai da máquina.
@@ -141,6 +145,7 @@ com o número que aparece em `jobbot status`. Uma recusa fecha as pendências da
 **Resposta automática** (desligada por padrão; `auto_reply.enabled`):
 
 - Responde só "ainda tem interesse?" e "qual sua disponibilidade?", com modelo fixo e a `availability` do perfil.
+- Responde só a e-mails do domínio da própria empresa.
 - Não responde mensagem longa, endereço no-reply ou qualquer mensagem que peça outra coisa (documento, link,
   salário, anexo...).
 - Responde no máximo uma vez a mesma coisa por candidatura.
