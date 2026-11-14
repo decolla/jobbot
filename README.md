@@ -126,6 +126,11 @@ Por padrão o anexo continua sendo o seu PDF original. Para anexar o adaptado, u
 
 Gupy e Vagas.com estão implementadas. Ligar ou não é decisão sua, depois de ler os termos.
 
+Ficaram de fora de propósito: a API do SmartRecruiters proíbe robôs no `robots.txt` (só libera o do LinkedIn), e a
+do Ashby (Nubank) responde ao `robots.txt` com acesso negado, que o jobbot trata como proibido. Para seguir uma
+empresa nova no Greenhouse ou no Lever, acrescente o nome que aparece na URL de vagas dela
+(`job-boards.greenhouse.io/<nome>` ou `jobs.lever.co/<nome>`) em `boards` ou `companies`.
+
 **LinkedIn e Indeed sem automação**, de dois jeitos:
 
 - **Alertas por e-mail**: crie alertas de vaga no LinkedIn e no Indeed e ligue `sources.email_alerts` (precisa de

@@ -19,7 +19,9 @@ llm:
 sources:
   greenhouse:
     enabled: true
-    boards: [stone, quintoandar, vtex, gympass, c6bank, rdstation]
+    # Conferidos em 2026-11: empresas com vagas no Brasil (inter tem estágio em MG; xpinc e wildlifestudios, estágio e júnior).
+    boards: [stone, quintoandar, vtex, gympass, c6bank, rdstation, inter, xpinc, btgpactual, ebanx, clara, wizinc,
+             wildlifestudios]
   lever:
     enabled: true
     companies: [neon, ciandt]
