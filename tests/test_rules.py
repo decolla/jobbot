@@ -37,6 +37,11 @@ def _job(title="Estágio em Desenvolvedor", location="São Paulo", modality="hyb
         "Especialista em Software",
         "Software Engineer III",
         "Data Scientist II | Dados",
+        "[Job - 32643] Mid DevOps Engineer, Brazil",
+        "[Job 32463] Mid level, QA Automation",
+        "[Job-32584] Mid-Level Java/React Developer, Brazil",
+        "[Job-31573] AI Engineer Master",
+        "[Job-32678] Master Backend Developer (Kotlin/Java), Brasil",
     ],
 )
 def test_senior_titles_are_discarded(title):
@@ -187,3 +192,18 @@ def test_remote_abroad_is_discarded():
 
 def test_empty_location_passes_to_llm():
     assert evaluate(_job(location="", modality="unknown"), _profile()).passed
+
+
+def test_dealbreaker_in_description_discards_job():
+    profile = _profile(dealbreakers=["contrato PJ"])
+    result = evaluate(_job(description="Contratação via Contrato PJ, 40h semanais."), profile)
+    assert (result.passed, result.reason) == (False, "critério eliminatório seu: contrato PJ")
+
+
+def test_job_without_dealbreaker_passes():
+    profile = _profile(dealbreakers=["contrato PJ"])
+    assert evaluate(_job(description="Python e SQL, regime CLT."), profile).passed
+
+
+def test_master_data_is_a_field_not_a_level():
+    assert evaluate(_job(title="Estágio Desenvolvedor Master Data"), _profile()).passed

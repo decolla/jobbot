@@ -80,6 +80,24 @@ candidatura e pergunta antes de enviar. Rodando agendado, sem terminal, elas fic
 | `approval` | Pede sua confirmação para cada envio. |
 | `auto` | Envia sozinho as vagas com score acima de `min_score`, até `daily_application_limit` por dia. |
 
+## Avaliação de cada vaga
+
+Antes do Claude, regras descartam o que não serve: senioridade, local, anos de experiência, palavras negativas e
+os seus `dealbreakers` (critérios eliminatórios, como "contrato PJ"). O que passa é avaliado e ganha um arquivo
+`reports/vagas/<id>.md`, com o link no relatório do dia e no pacote da candidatura:
+
+- **Requisitos**: até 12, cada um com o peso na vaga (crítico, alto, relevante, desejável), se você atende e a
+  evidência nos seus documentos. O peso vem do texto da vaga: se o Claude não citar o trecho literal, o peso é
+  tratado como estimativa e não pode ser crítico. Evidência que não está nos seus documentos é descartada.
+- **Lacunas e como lidar**: para cada requisito importante que falta, uma forma honesta de lidar.
+- **Alertas** e **legitimidade**: sinais de vaga fantasma (publicação antiga, descrição genérica...), como sinais
+  para você decidir, nunca como acusação.
+
+Antes de candidatar, o jobbot confere se a vaga ainda está aberta. Vaga encerrada não gasta Claude e não fica parada.
+
+A ideia da tabela de requisitos, das lacunas e dos sinais de legitimidade veio do
+[career-ops](https://github.com/career-ops-hq/career-ops) (licença MIT).
+
 ## Fontes
 
 | Fonte | Padrão | Como |

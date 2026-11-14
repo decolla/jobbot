@@ -20,6 +20,7 @@ from jobbot.apply.text_tailor import FabricationError, QuestionAnswer, Tailored,
 from jobbot.llm import LLMError
 from jobbot.models import Job, detect_language, strip_accents
 from jobbot.profile import ConfigError, Profile, Settings, read_document_text
+from jobbot.scoring.evaluation import evaluation_path
 
 OBSTACLE_MESSAGES = {
     "captcha": "o site pediu CAPTCHA ou verificação anti-bot; candidate-se à mão pelo link",
@@ -37,6 +38,7 @@ class ApplySummary:
     manual: int = 0
     uncertain: int = 0
     skipped_by_limit: int = 0
+    closed: int = 0
 
 
 def _question_key(text: str) -> str:
@@ -148,7 +150,9 @@ class Applier:
         job = Job.from_row(row)
         page = self._browser().new_page()
         try:
-            open_form(page, job.url)
+            if not open_form(page, job.url):
+                self._closed(app_id, row, summary)
+                return
             obstacle = detect_obstacle(page)
             if obstacle:
                 self._block(app_id, row, OBSTACLE_MESSAGES[obstacle], summary)
@@ -249,6 +253,11 @@ class Applier:
         else:
             self._block(app_id, row, result.detail, summary, plan)
 
+    def _closed(self, app_id: int, row: sqlite3.Row, summary: ApplySummary) -> None:
+        db.set_application_status(self.conn, app_id, "job_closed", "a vaga foi encerrada antes da candidatura")
+        db.log_event(self.conn, "application_job_closed", application_id=app_id, job_id=row["id"], payload={"url": row["url"]})
+        summary.closed += 1
+
     def _fail(self, app_id: int, row: sqlite3.Row, reason: str, summary: ApplySummary) -> None:
         # Erro com a candidatura já reservada para envio: o clique pode ter acontecido. Bloquear permitiria
         # um segundo envio no --retry-blocked; incerto nunca é repetido sozinho.
@@ -326,6 +335,10 @@ class Applier:
             f"- Score: {row['score']} ({row['score_reason']})",
             f"- Situação: {reason}",
             f"- Depois de enviar, rode: jobbot done {app_id}",
+        ]
+        if evaluation_path(self.root, row["id"]).exists():
+            lines.append(f"- Avaliação da vaga (requisitos, lacunas, como lidar): ../../../reports/vagas/{row['id']}.md")
+        lines += [
             "",
             "## Carta de apresentação",
             "",

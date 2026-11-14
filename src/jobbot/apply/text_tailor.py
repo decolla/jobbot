@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 import yaml
 from pydantic import BaseModel, Field
 
-from jobbot.models import Job, strip_accents
+from jobbot.models import Job, match_key
 from jobbot.profile import Profile
 from jobbot.scoring.llm_scorer import MAX_JOB_CHARS, candidate_summary, neutralize_tags, scrub_contacts
 
@@ -57,30 +57,25 @@ def build_facts(profile: Profile, resume_text: str, extra_texts: list[str]) -> s
     return f"{header}{candidate_summary(profile)}\n{documents}"
 
 
-def _normalize(text: str) -> str:
-    # Sem espaços nem hífens: a extração de PDF gruda palavras ("comApache") e separa outras ("F ull-stack").
-    return re.sub(r"[\s\-\u00ad\u2010]+", "", strip_accents(text))
-
-
 def _numbers(text: str) -> set[str]:
     return set(re.findall(r"\d+", text))
 
 
 def verify(tailored: Tailored, facts: str, job: Job) -> list[str]:
-    plain_facts = _normalize(facts)
+    plain_facts = match_key(facts)
     known_numbers = _numbers(f"{facts} {job.title} {job.description}")
     problems = []
     if not tailored.claims:
         problems.append("a carta não indica a evidência de nenhum fato")
     for claim in tailored.claims:
-        if not claim.evidence.strip() or _normalize(claim.evidence) not in plain_facts:
+        if not claim.evidence.strip() or match_key(claim.evidence) not in plain_facts:
             problems.append(f"evidência não encontrada nos documentos: {claim.evidence!r}")
     texts = [tailored.cover_letter]
     for answer in tailored.answers:
         if not answer.can_answer:
             continue
         texts.append(answer.answer)
-        if not answer.evidence.strip() or _normalize(answer.evidence) not in plain_facts:
+        if not answer.evidence.strip() or match_key(answer.evidence) not in plain_facts:
             problems.append(f"resposta sem evidência nos documentos ({answer.question!r}): {answer.evidence!r}")
     for number in sorted(_numbers(" ".join(texts)) - known_numbers):
         problems.append(f"número que não está nos documentos nem na vaga: {number}")

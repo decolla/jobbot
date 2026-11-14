@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import sqlite3
 from dataclasses import dataclass, field
+from datetime import date
 from pathlib import Path
 
 import httpx
@@ -12,7 +13,8 @@ from jobbot import db
 from jobbot.llm import ClaudeClient, LLMError
 from jobbot.models import Job
 from jobbot.profile import Profile, Settings, resume_text_for
-from jobbot.scoring.llm_scorer import score_job
+from jobbot.scoring.evaluation import audit, write_evaluation
+from jobbot.scoring.llm_scorer import ScoreResult, candidate_summary, score_job
 from jobbot.scoring.rules import evaluate
 from jobbot.sources import build_sources
 from jobbot.sources.base import PoliteClient, Source, SourceError
@@ -97,6 +99,15 @@ def _enrich(conn: sqlite3.Connection, row: sqlite3.Row, sources: dict[str, Sourc
     return job
 
 
+def record_evaluation(conn: sqlite3.Connection, root: Path, job_id: int, job: Job, profile: Profile, resume_text: str,
+                      result: ScoreResult, status: str) -> ScoreResult:
+    """Confere as citações da avaliação, guarda no banco e escreve reports/vagas/<id>.md."""
+    result, notes = audit(result, job, f"{candidate_summary(profile)}\n{resume_text}", date.today())
+    db.set_score(conn, job_id, result.score, result.reason, status, result.model_dump_json())
+    write_evaluation(root, job_id, job, result.score, result, notes)
+    return result
+
+
 def run_score(conn: sqlite3.Connection, settings: Settings, profile: Profile, root: Path, llm,
               sources: list[Source]) -> ScoreSummary:
     summary = ScoreSummary()
@@ -122,7 +133,8 @@ def run_score(conn: sqlite3.Connection, settings: Settings, profile: Profile, ro
             continue
         consecutive_failures = 0
         approved = result.score >= settings.min_score
-        db.set_score(conn, row["id"], result.score, result.reason, "scored" if approved else "low_score")
+        result = record_evaluation(conn, root, row["id"], job, profile, resume_text, result,
+                                   "scored" if approved else "low_score")
         if approved:
             summary.approved += 1
         else:

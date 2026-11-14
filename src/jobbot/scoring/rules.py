@@ -14,7 +14,9 @@ LEVELS = {
 }
 SENIOR_TITLE = re.compile(
     r"\b(senior|sr|pleno|staff|principal|lead|lider|head|gerente|manager|coordenador|coordenadora|"
-    r"diretor|diretora|especialista|specialist|arquiteto|arquiteta|architect|ii|iii|iv)\b|\bpl\b(?!/)"
+    r"diretor|diretora|especialista|specialist|arquiteto|arquiteta|architect|ii|iii|iv|mid|middle)\b|\bpl\b(?!/)|"
+    # "Master" é nível na CI&T e em outras; "Master Data" é uma área.
+    r"\bmaster\b(?!\s+data)"
 )
 # Elegibilidade para vaga afirmativa é decisão pessoal: o jobbot não declara nada em nome do usuário.
 AFFIRMATIVE = re.compile(
@@ -100,6 +102,10 @@ def _keyword_match(job: Job, plain_title: str, profile: Profile) -> bool:
 
 def evaluate(job: Job, profile: Profile) -> RuleResult:
     plain_title = strip_accents(job.title)
+    plain_text = f"{plain_title}\n{strip_accents(job.description)}"
+    for term in profile.dealbreakers:
+        if _has_term(term, plain_text):
+            return RuleResult(False, f"critério eliminatório seu: {term}")
     if AFFIRMATIVE.search(plain_title):
         return RuleResult(False, "vaga afirmativa: avalie sua elegibilidade e use jobbot add se for o seu caso")
     for term in profile.keywords.negative:

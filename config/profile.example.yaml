@@ -42,6 +42,10 @@ keywords:
 # Vagas que exigem mais anos de experiência do que isto são descartadas.
 max_years_required: 2
 
+# Seus critérios eliminatórios: a vaga que citar um destes trechos (no título ou na descrição) é descartada
+# antes de ir ao Claude. Ex.: ["contrato PJ", "disponibilidade para viagens", "plantão"]
+dealbreakers: []
+
 # Fatos verdadeiros que não estão no currículo (projetos, cursos, disponibilidade para mudar etc.).
 facts: []
 

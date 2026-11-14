@@ -217,6 +217,8 @@ class FormSite:
             "/cloudflare": CLOUDFLARE,
             "/login": LOGIN,
             "/no-form": SILENT,
+            # O Greenhouse manda a vaga encerrada para a página da empresa com ?error=true.
+            "/board?error=true": SIMPLE_FORM,
         }
         self.responses = {"/submit": CONFIRMED, "/silent": SILENT, "/thanks": SILENT, "/invalid": INVALID, "/captcha": CAPTCHA_AFTER}
         site = self

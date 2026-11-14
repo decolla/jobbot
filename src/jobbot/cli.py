@@ -38,7 +38,8 @@ def _print_apply_summary(mode: str, summary: ApplySummary) -> None:
     print(
         f"Modo: {mode} | enviadas: {summary.submitted} | dry-run: {summary.dry_run} | "
         f"aguardando aprovação: {summary.pending_approval} | para você enviar: {summary.manual} | "
-        f"paradas: {summary.blocked} | envio incerto: {summary.uncertain} | fora do limite: {summary.skipped_by_limit}"
+        f"paradas: {summary.blocked} | envio incerto: {summary.uncertain} | encerradas: {summary.closed} | "
+        f"fora do limite: {summary.skipped_by_limit}"
     )
 
 

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import re
 import time
+from urllib.parse import parse_qs, urlsplit
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -179,17 +180,26 @@ def _settle(page: Page) -> None:
         pass  # Sites com conexões abertas nunca ficam ociosos; o conteúdo já carregou.
 
 
-def open_form(page: Page, url: str) -> None:
-    page.goto(url, wait_until="domcontentloaded", timeout=45000)
+def job_closed(status: int | None, final_url: str) -> bool:
+    """Vaga encerrada: página removida, ou o redirecionamento do Greenhouse para a página da empresa."""
+    return status in (404, 410) or parse_qs(urlsplit(final_url).query).get("error") == ["true"]
+
+
+def open_form(page: Page, url: str) -> bool:
+    """Abre o formulário da vaga. Devolve False se a vaga foi encerrada."""
+    response = page.goto(url, wait_until="domcontentloaded", timeout=45000)
+    if job_closed(response.status if response else None, page.url):
+        return False
     _settle(page)
     if page.locator('input:visible:not([type="hidden"]), textarea:visible, select:visible').count():
-        return
+        return True
     # Só links: um botão "Candidatar-se" pode ser candidatura em um clique, e abrir a página não pode enviar nada.
     link = page.locator("a[href]:visible").filter(has_text=APPLY_LINK).first
     if link.count():
         link.click(timeout=10000)
         page.wait_for_load_state("domcontentloaded", timeout=30000)
         _settle(page)
+    return True
 
 
 def detect_obstacle(page: Page) -> str | None:

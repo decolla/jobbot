@@ -174,3 +174,10 @@ def test_report_command_writes_file_and_prints_path(project, capsys):
     assert main(["report"]) == 0
     assert f"{TODAY.isoformat()}.md" in capsys.readouterr().out
     assert (project / "reports" / f"{TODAY.isoformat()}.md").exists()
+
+
+def test_new_approved_job_links_its_evaluation(conn, project):
+    job_id = _job(conn, 1, score=85, status="scored")
+    (project / "reports" / "vagas").mkdir(parents=True)
+    (project / "reports" / "vagas" / f"{job_id}.md").write_text("avaliação", encoding="utf-8")
+    assert f"[avaliação](vagas/{job_id}.md)" in _report(conn, project)

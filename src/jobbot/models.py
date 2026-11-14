@@ -29,6 +29,14 @@ def strip_accents(text: str) -> str:
     return "".join(c for c in decomposed if not unicodedata.combining(c)).lower()
 
 
+def match_key(text: str) -> str:
+    """Forma de comparar trechos literais: sem acentos, maiúsculas, espaços nem hífens.
+
+    A extração de PDF gruda palavras ("comApache") e separa outras ("F ull-stack", "inte-gration").
+    """
+    return re.sub(r"[\s\-\u00ad\u2010]+", "", strip_accents(text))
+
+
 def detect_modality(text: str) -> Modality:
     plain = strip_accents(text)
     if re.search(r"hibrid|hybrid", plain):

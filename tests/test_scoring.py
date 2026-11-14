@@ -8,7 +8,7 @@ from jobbot.cli import main
 from jobbot.llm import LLMError
 from jobbot.models import Job
 from jobbot.profile import load_profile, load_settings
-from jobbot.scoring.llm_scorer import ScoreResult, build_prompt, score_job
+from jobbot.scoring.llm_scorer import Requirement, ScoreResult, build_prompt, score_job
 
 
 class FakeLLM:
@@ -210,3 +210,18 @@ def test_english_job_is_scored_against_english_resume(conn, project):
     by_resume = {"en": [p for p in llm.prompts if "Project X in Python" in p],
                  "pt": [p for p in llm.prompts if "Projeto X em Python" in p]}
     assert len(by_resume["en"]) == 1 and len(by_resume["pt"]) == 1
+
+
+def test_scored_job_gets_audited_evaluation_report(conn, project):
+    job_id, _ = db.upsert_job(conn, _job())
+    requirements = [
+        Requirement(requirement="Python", importance="critical", basis="stated", jd_quote="Python", match="strong",
+                    evidence="Projeto X em Python"),
+        Requirement(requirement="Kafka", importance="high", basis="structural", match="strong", evidence="Kafka na Google"),
+    ]
+    _run(conn, project, FakeLLM(ScoreResult(score=90, reason="aderente", requirements=requirements)))
+    text = (project / "reports" / "vagas" / f"{job_id}.md").read_text(encoding="utf-8")
+    assert "Projeto X em Python" in text
+    assert "Kafka na Google" not in text  # evidência que não está nos documentos é descartada
+    stored = ScoreResult.model_validate_json(db.get_job(conn, job_id)["evaluation_json"])
+    assert stored.requirements[1].match == "partial"

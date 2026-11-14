@@ -462,3 +462,14 @@ def test_portuguese_job_keeps_main_resume(conn, project, site):
     _applier(conn, project).run("dry-run")
     fields = db.get_events(conn, "application_dry_run")[0]["payload"]["fields"]
     assert any(f["origin"] == "curriculo" and f["value"].endswith("curriculo.docx") for f in fields)
+
+
+@pytest.mark.parametrize("path", ["/vaga-removida", "/board?error=true"])
+def test_closed_job_is_marked_closed_without_spending_llm(conn, real_project, site, path):
+    job_id = _add_job(conn, site.url(path))
+    llm = FakeLLM()
+    summary = _applier(conn, real_project, llm).run("auto")
+    app = _application(conn, job_id)
+    assert (app["status"], summary.closed, summary.blocked) == ("job_closed", 1, 0)
+    assert llm.calls == 0
+    assert site.posts == []

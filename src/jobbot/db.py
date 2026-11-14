@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS jobs (
     status TEXT NOT NULL DEFAULT 'new',
     score INTEGER,
     score_reason TEXT,
+    evaluation_json TEXT,
     first_seen_at TEXT NOT NULL,
     last_seen_at TEXT NOT NULL
 );
@@ -108,7 +109,20 @@ def connect(path: Path) -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     conn.executescript(SCHEMA)
+    _migrate(conn)
     return conn
+
+
+# Colunas criadas depois da primeira versão: bancos antigos ganham a coluna sem perder dados.
+MIGRATIONS = {"jobs": {"evaluation_json": "TEXT"}}
+
+
+def _migrate(conn: sqlite3.Connection) -> None:
+    for table, columns in MIGRATIONS.items():
+        existing = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})")}
+        for name, kind in columns.items():
+            if name not in existing:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {kind}")
 
 
 @contextmanager
@@ -162,8 +176,10 @@ def set_job_description(conn: sqlite3.Connection, job_id: int, description: str)
     conn.execute("UPDATE jobs SET description = ? WHERE id = ?", (description, job_id))
 
 
-def set_score(conn: sqlite3.Connection, job_id: int, score: int, reason: str, status: str) -> None:
-    conn.execute("UPDATE jobs SET score = ?, score_reason = ?, status = ? WHERE id = ?", (score, reason, status, job_id))
+def set_score(conn: sqlite3.Connection, job_id: int, score: int, reason: str, status: str,
+              evaluation_json: str | None = None) -> None:
+    conn.execute("UPDATE jobs SET score = ?, score_reason = ?, status = ?, evaluation_json = ? WHERE id = ?",
+                 (score, reason, status, evaluation_json, job_id))
 
 
 def create_application(conn: sqlite3.Connection, job_id: int, mode: str) -> int:

@@ -99,6 +99,7 @@ class Profile(_Strict):
     salary_range: SalaryRange = Field(default_factory=SalaryRange)
     keywords: Keywords = Field(default_factory=Keywords)
     max_years_required: int = 2
+    dealbreakers: list[str] = Field(default_factory=list)
     facts: list[str] = Field(default_factory=list)
     availability: str = ""
     saved_answers: list[SavedAnswer] = Field(default_factory=list)

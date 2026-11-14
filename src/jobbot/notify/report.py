@@ -112,6 +112,11 @@ def _pack(root: Path, app_id: int) -> str:
     return f" · [pacote]({_link(root, pack)})" if (root / pack).exists() else ""
 
 
+def _evaluation(root: Path, job_id: int) -> str:
+    path = Path("reports") / "vagas" / f"{job_id}.md"
+    return f" · [avaliação]({_link(root, path)})" if (root / path).exists() else ""
+
+
 def _section(title: str, lines: list[str], empty: str = "Nenhuma.") -> list[str]:
     return [f"## {title}", "", *(lines or [empty]), ""]
 
@@ -158,7 +163,8 @@ def render_report(data: DailyData, root: Path) -> str:
     ]
     news = [f"- {label}: {job}" + (f': "{subject}"' if subject else "") for label, job, subject in data.news]
     submitted = [f"- {a['title']} ({a['company']}): {a['url']}" for a in data.submitted_today]
-    new_jobs = [f"- {j['score']} · {j['title']} ({j['company']}): {j['url']}" for j in data.new_approved]
+    new_jobs = [f"- {j['score']} · {j['title']} ({j['company']}): {j['url']}{_evaluation(root, j['id'])}"
+                for j in data.new_approved]
     logs = [f"- [erro] {r['component']}: {r['message']}" for r in data.errors]
     logs += [f"- [aviso] {r['component']}: {r['message']}" for r in data.warnings]
     if len(logs) > MAX_LOG_LINES:
