@@ -1,4 +1,7 @@
 import pytest
+import yaml
+
+from conftest import write_docx
 
 from jobbot import db, pipeline
 from jobbot.cli import main
@@ -191,3 +194,19 @@ def test_score_command_reports_counts(project, capsys, monkeypatch):
     monkeypatch.setattr(pipeline, "build_enabled_sources", lambda settings: [])
     assert main(["score"]) == 0
     assert "1 aprovada" in capsys.readouterr().out
+
+
+def test_english_job_is_scored_against_english_resume(conn, project):
+    write_docx(project / "documents" / "cv-en.docx", "Project X in Python")
+    path = project / "config/profile.yaml"
+    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    data["documents"]["resume_en"] = "documents/cv-en.docx"
+    path.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
+    english = "We are looking for an intern to join our team. You will work with Python and the experience is great."
+    db.upsert_job(conn, _job(n=1, description=english))
+    db.upsert_job(conn, _job(n=2, description="Buscamos uma pessoa para atuar com Python no time."))
+    llm = FakeLLM(ScoreResult(score=90, reason="a"), ScoreResult(score=90, reason="b"))
+    _run(conn, project, llm)
+    by_resume = {"en": [p for p in llm.prompts if "Project X in Python" in p],
+                 "pt": [p for p in llm.prompts if "Projeto X em Python" in p]}
+    assert len(by_resume["en"]) == 1 and len(by_resume["pt"]) == 1

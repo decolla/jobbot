@@ -11,7 +11,7 @@ import httpx
 from jobbot import db
 from jobbot.llm import ClaudeClient, LLMError
 from jobbot.models import Job
-from jobbot.profile import Profile, Settings, read_document_text
+from jobbot.profile import Profile, Settings, resume_text_for
 from jobbot.scoring.llm_scorer import score_job
 from jobbot.scoring.rules import evaluate
 from jobbot.sources import build_sources
@@ -104,12 +104,13 @@ def run_score(conn: sqlite3.Connection, settings: Settings, profile: Profile, ro
     pending = db.jobs_by_status(conn, "filtered", limit=settings.max_scores_per_run)
     if not pending:
         return summary
-    resume_text = read_document_text(root / profile.documents.resume)
+    resumes: dict[str, str] = {}
     by_name = {source.name: source for source in sources}
     consecutive_failures = 0
     for row in pending:
         job = _enrich(conn, row, by_name)
         try:
+            resume_text = resume_text_for(root, profile, job, resumes)
             result = score_job(job, profile, resume_text, llm, settings.llm.scoring_model)
         except LLMError as exc:
             summary.errors += 1

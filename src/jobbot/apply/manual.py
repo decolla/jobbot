@@ -14,7 +14,7 @@ from pydantic import BaseModel
 from jobbot import db
 from jobbot.apply.base import Applier
 from jobbot.models import Job, Modality, normalize_url
-from jobbot.profile import ConfigError, Profile, Settings, read_document_text
+from jobbot.profile import ConfigError, Profile, Settings, resume_text_for
 from jobbot.scoring.llm_scorer import MAX_JOB_CHARS, neutralize_tags, score_job
 
 # Texto curto não é uma página de vaga e pode ser uma senha copiada: nem vai ao Claude nem é gravado.
@@ -78,8 +78,7 @@ def add_manual_job(conn: sqlite3.Connection, settings: Settings, profile: Profil
     if not created:
         return AddResult(False, job_id)
     # Foi o usuário quem escolheu a vaga: a nota informa, mas não impede de preparar o material.
-    resume_text = read_document_text(root / profile.documents.resume)
-    result = score_job(job, profile, resume_text, llm, settings.llm.scoring_model)
+    result = score_job(job, profile, resume_text_for(root, profile, job), llm, settings.llm.scoring_model)
     db.set_score(conn, job_id, result.score, result.reason, "scored")
     pack = Applier(conn, settings, profile, root, llm).prepare_manual(job_id)
     return AddResult(True, job_id, result.score, result.reason, pack)

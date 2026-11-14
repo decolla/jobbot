@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import os
+import re
 import shutil
+import unicodedata
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -14,6 +16,8 @@ import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 from pypdf import PdfReader
 from pypdf.errors import PyPdfError
+
+from jobbot.models import detect_language
 
 WORD_NS = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
 EXAMPLE_EMAIL_DOMAIN = "@exemplo.com"
@@ -64,7 +68,11 @@ class Keywords(_Strict):
 
 class Documents(_Strict):
     resume: str
+    resume_en: str = ""  # usado nas vagas em inglês, se existir
     extras: list[str] = Field(default_factory=list)
+
+    def resume_for(self, language: str) -> str:
+        return self.resume_en if language == "en" and self.resume_en else self.resume
 
 
 class SavedAnswer(_Strict):
@@ -195,11 +203,29 @@ def load_settings(root: Path | None = None) -> Settings:
     return _load_yaml_model((root or project_root()) / "config" / "settings.yaml", Settings)
 
 
+# Acentos que o pypdf extrai soltos de PDFs gerados por LaTeX, com o caractere combinante equivalente.
+LOOSE_ACCENTS = {"´": "\u0301", "`": "\u0300", "˜": "\u0303", "ˆ": "\u0302", "¨": "\u0308"}
+_ACCENT = "[" + "".join(LOOSE_ACCENTS) + "]"
+
+
+def clean_pdf_text(text: str) -> str:
+    """Junta acentos soltos à letra ("constru¸ c˜ ao" vira "construção") e letras separadas pelo kerning."""
+    # "distribu ´ ıdos": o i sem pingo vem cercado de espaços que não existem na palavra.
+    text = re.sub(rf"\s?({_ACCENT})\s?ı", lambda m: "i" + LOOSE_ACCENTS[m[1]], text)
+    # A cedilha vem antes do c minúsculo ("¸ c") e depois do C maiúsculo ("C ¸").
+    text = re.sub(r"¸\s?([cC])", "\\1\u0327", text)
+    text = re.sub(r"([cC])\s?¸", "\\1\u0327", text)
+    text = re.sub(rf"({_ACCENT})\s?([AEIOUaeiouNn])", lambda m: m[2] + LOOSE_ACCENTS[m[1]], text)
+    # "F ull-stack", "T emporais", "V ARISE": o kerning dessas maiúsculas vira espaço na extração.
+    text = re.sub(r"(?<![\w.])([FTVWY]) (?=[a-z]|[A-Z]{2})", r"\1", text)
+    return unicodedata.normalize("NFC", text)
+
+
 def read_document_text(path: Path) -> str:
     suffix = path.suffix.lower()
     try:
         if suffix == ".pdf":
-            return "\n".join(page.extract_text() or "" for page in PdfReader(path).pages).strip()
+            return clean_pdf_text("\n".join(page.extract_text() or "" for page in PdfReader(path).pages).strip())
         if suffix == ".docx":
             with zipfile.ZipFile(path) as z:
                 root = ElementTree.fromstring(z.read("word/document.xml"))
@@ -208,6 +234,16 @@ def read_document_text(path: Path) -> str:
     except (OSError, KeyError, zipfile.BadZipFile, ElementTree.ParseError, PyPdfError) as exc:
         raise ConfigError(f"não foi possível ler {path.name}: {exc}") from exc
     raise ConfigError(f"formato não suportado: {path.name} (use PDF ou DOCX)")
+
+
+def resume_text_for(root: Path, profile: Profile, job, cache: dict[str, str] | None = None) -> str:
+    """Texto do currículo no idioma da vaga. O cache evita reler o PDF a cada vaga."""
+    path = profile.documents.resume_for(detect_language(f"{job.title}\n{job.description}"))
+    if cache is None:
+        return read_document_text(root / path)
+    if path not in cache:
+        cache[path] = read_document_text(root / path)
+    return cache[path]
 
 
 def check_setup(root: Path | None = None) -> list[SetupIssue]:
@@ -223,7 +259,8 @@ def check_setup(root: Path | None = None) -> list[SetupIssue]:
         issues.append(SetupIssue("error", f"{exc} (use config/profile.example.yaml como base)"))
         profile = None
     if profile:
-        for doc in [profile.documents.resume, *profile.documents.extras]:
+        documents = profile.documents
+        for doc in [documents.resume, *([documents.resume_en] if documents.resume_en else []), *documents.extras]:
             if not (root / doc).exists():
                 issues.append(SetupIssue("error", f"documento não encontrado: {doc}"))
         if profile.is_example:

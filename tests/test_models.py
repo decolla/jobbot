@@ -1,6 +1,6 @@
 import pytest
 
-from jobbot.models import Job, detect_modality, normalize_url
+from jobbot.models import Job, detect_language, detect_modality, normalize_url
 
 
 def _job(**over):
@@ -49,3 +49,16 @@ def test_detect_modality(text, expected):
 def test_normalize_url_drops_tracking_but_keeps_identity_params():
     url = "https://www.indeed.com/viewjob?jk=abc123&utm_source=mail&trk=x#frag"
     assert normalize_url(url) == "https://www.indeed.com/viewjob?jk=abc123"
+
+
+@pytest.mark.parametrize(
+    "text, expected",
+    [
+        ("We are looking for a software engineering intern to join our team and work with Python.", "en"),
+        ("Buscamos uma pessoa estagiária para atuar com desenvolvimento de software no nosso time.", "pt"),
+        ("Python, SQL, Docker", "pt"),
+        ("", "pt"),
+    ],
+)
+def test_detect_language(text, expected):
+    assert detect_language(text) == expected

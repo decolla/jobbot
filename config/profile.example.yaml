@@ -73,4 +73,6 @@ saved_answers: []
 
 documents:
   resume: documents/curriculo.pdf
+  # Opcional: currículo em inglês, usado nas vagas escritas em inglês (pontuação, carta e anexo).
+  resume_en: ""
   extras: []

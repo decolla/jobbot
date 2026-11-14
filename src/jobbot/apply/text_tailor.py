@@ -58,7 +58,8 @@ def build_facts(profile: Profile, resume_text: str, extra_texts: list[str]) -> s
 
 
 def _normalize(text: str) -> str:
-    return re.sub(r"\s+", " ", strip_accents(text)).strip()
+    # Sem espaços nem hífens: a extração de PDF gruda palavras ("comApache") e separa outras ("F ull-stack").
+    return re.sub(r"[\s\-\u00ad\u2010]+", "", strip_accents(text))
 
 
 def _numbers(text: str) -> set[str]:

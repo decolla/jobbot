@@ -18,7 +18,7 @@ from jobbot.apply.form_filler import BrowserSession, detect_obstacle, fill_form,
 from jobbot.apply.form_plan import FillPlan, FormField, plan_fill
 from jobbot.apply.text_tailor import FabricationError, QuestionAnswer, Tailored, build_facts, tailor
 from jobbot.llm import LLMError
-from jobbot.models import Job, strip_accents
+from jobbot.models import Job, detect_language, strip_accents
 from jobbot.profile import ConfigError, Profile, Settings, read_document_text
 
 OBSTACLE_MESSAGES = {
@@ -51,6 +51,10 @@ def _audit_fields(plan: FillPlan) -> list[dict]:
     ]
 
 
+def _language(job: Job) -> str:
+    return detect_language(f"{job.title}\n{job.description}")
+
+
 def _first_line(exc: Exception) -> str:
     return (str(exc).splitlines() or [type(exc).__name__])[0]
 
@@ -66,7 +70,7 @@ class Applier:
         self.confirm = confirm
         self.submit_timeout_ms = submit_timeout_ms
         self._session: BrowserSession | None = None
-        self._facts: str | None = None
+        self._facts: dict[str, str] = {}
 
     # ---------- entrada ----------
 
@@ -168,7 +172,7 @@ class Applier:
             page.close()
 
     def _build_plan(self, app_id: int, job: Job, fields: list[FormField]) -> tuple[FillPlan, Tailored]:
-        resume = self.root / self.profile.documents.resume
+        resume = self.root / self.profile.documents.resume_for(_language(job))
         questions = plan_fill(fields, self.profile, resume).questions
         tailored = self._tailor(app_id, job, questions)
         letter_path = self._app_dir(app_id) / "carta.txt"
@@ -190,14 +194,14 @@ class Applier:
             known = {_question_key(answer.question) for answer in previous.answers}
             if all(_question_key(question.label) in known for question in questions):
                 return previous
-        return tailor(job, self._load_facts(), questions, self.llm, self.settings.llm.writing_model)
+        return tailor(job, self._load_facts(job), questions, self.llm, self.settings.llm.writing_model)
 
-    def _load_facts(self) -> str:
-        if self._facts is None:
-            resume_text = read_document_text(self.root / self.profile.documents.resume)
+    def _load_facts(self, job: Job) -> str:
+        path = self.profile.documents.resume_for(_language(job))
+        if path not in self._facts:
             extras = [read_document_text(self.root / extra) for extra in self.profile.documents.extras]
-            self._facts = build_facts(self.profile, resume_text, extras)
-        return self._facts
+            self._facts[path] = build_facts(self.profile, read_document_text(self.root / path), extras)
+        return self._facts[path]
 
     # ---------- resultado ----------
 

@@ -136,3 +136,11 @@ def test_build_facts_has_resume_and_profile_but_no_contact_or_salary():
 
 def test_build_facts_includes_extra_documents():
     assert "Histórico: nota 9" in build_facts(_profile(), "cv", ["Histórico: nota 9"])
+
+
+def test_verify_ignores_spaces_lost_or_added_by_pdf_extraction():
+    # PDFs de LaTeX grudam palavras em negrito ("comApache") e separam outras ("F ull-stack").
+    facts = "Implementou fluxos comApache Kafka. F ull-stack com .NET. AI inte-\ngration."
+    claims = [Claim(text="a", evidence="fluxos com Apache Kafka"), Claim(text="b", evidence="Full-stack com .NET"),
+              Claim(text="c", evidence="AI integration")]
+    assert verify(_tailored(claims=claims), facts, _job()) == []

@@ -130,3 +130,20 @@ def test_read_unsupported_document_raises(tmp_path):
     path.write_text("x")
     with pytest.raises(ConfigError, match="cv.odt"):
         read_document_text(path)
+
+
+def test_resume_for_english_job_uses_english_resume_when_set(project):
+    _edit_yaml(project / "config/profile.yaml", lambda d: d["documents"].update(resume_en="documents/cv-en.pdf"))
+    profile = load_profile(project)
+    assert profile.documents.resume_for("en") == "documents/cv-en.pdf"
+    assert profile.documents.resume_for("pt") == profile.documents.resume
+
+
+def test_resume_for_english_job_falls_back_to_main_resume(project):
+    profile = load_profile(project)
+    assert profile.documents.resume_for("en") == profile.documents.resume
+
+
+def test_missing_english_resume_is_an_error(project):
+    _edit_yaml(project / "config/profile.yaml", lambda d: d["documents"].update(resume_en="documents/nao-existe.pdf"))
+    assert any("nao-existe.pdf" in e for e in _errors(project))

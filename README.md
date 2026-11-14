@@ -41,7 +41,9 @@ uv run playwright install chromium
    Tudo ali é tratado como verdade. Use `facts` para fatos verdadeiros que não estão no currículo.
    Enquanto o e-mail terminar em `@exemplo.com`, nenhum envio real acontece.
 2. **Documentos**: coloque o currículo (PDF ou DOCX) em `documents/` e aponte `documents.resume` para ele.
-   Histórico, portfólio etc. vão em `documents.extras`.
+   Se tiver um currículo em inglês, aponte `documents.resume_en`: as vagas escritas em inglês usam ele na
+   pontuação, na carta e no anexo. Histórico, portfólio etc. vão em `documents.extras`. PDFs gerados em LaTeX
+   funcionam: os acentos soltos que a extração de texto produz são corrigidos.
 3. **Preferências**: `config/settings.yaml` tem o modo, o score mínimo, o limite diário, as fontes ligadas,
    o acompanhamento por e-mail, as notificações e a resposta automática.
 4. **Segredos (opcional)**: copie `.env.example` para `.env`. Só é preciso para ler e-mail (IMAP), enviar

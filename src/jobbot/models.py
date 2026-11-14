@@ -11,6 +11,12 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from pydantic import BaseModel, computed_field, field_validator
 
 Modality = Literal["remote", "hybrid", "onsite", "unknown"]
+Language = Literal["pt", "en"]
+
+PT_WORDS = {"de", "da", "do", "das", "dos", "que", "para", "com", "uma", "um", "em", "nao", "voce", "nossa",
+            "nosso", "vaga", "experiencia", "conhecimento", "atuar", "pessoa", "sera", "como", "sao"}
+EN_WORDS = {"the", "and", "to", "of", "with", "for", "you", "we", "our", "are", "is", "will", "experience",
+            "team", "work", "your", "skills", "in", "an", "be"}
 
 TRACKING_PARAMS = {
     "trk", "trkinfo", "refid", "trackingid", "lipi", "midtoken", "midsig", "eid",
@@ -32,6 +38,14 @@ def detect_modality(text: str) -> Modality:
     if re.search(r"presencial|on[- ]?site", plain):
         return "onsite"
     return "unknown"
+
+
+def detect_language(text: str) -> Language:
+    """Idioma da vaga, para escolher o currículo. Na dúvida, português."""
+    words = re.findall(r"[a-z]+", strip_accents(text))
+    pt = sum(word in PT_WORDS for word in words)
+    en = sum(word in EN_WORDS for word in words)
+    return "en" if en >= 3 and en > 1.5 * pt else "pt"
 
 
 def normalize_url(url: str) -> str:

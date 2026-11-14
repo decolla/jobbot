@@ -5,6 +5,7 @@ from datetime import date
 import pytest
 import yaml
 
+from conftest import write_docx
 from form_site import FormSite
 from jobbot import db
 from jobbot.apply.base import Applier
@@ -420,3 +421,44 @@ def test_browser_error_on_one_job_does_not_stop_the_next(conn, real_project, sit
     _applier(conn, real_project).run("auto")
     assert _application(conn, broken)["status"] == "blocked"
     assert _application(conn, good)["status"] == "submitted"
+
+
+ENGLISH = "We are looking for an intern to join our team. You will work with Python and the experience is great."
+
+
+def _with_english_resume(project):
+    write_docx(project / "documents" / "cv-en.docx", "Project X in Python")
+    path = project / "config/profile.yaml"
+    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    data["documents"]["resume_en"] = "documents/cv-en.docx"
+    path.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
+
+
+class RecordingLLM(FakeLLM):
+    def __init__(self, result):
+        super().__init__(result)
+        self.prompts = []
+
+    def ask(self, prompt, schema, model, system=None):
+        self.prompts.append(prompt)
+        return super().ask(prompt, schema, model, system)
+
+
+def test_english_job_uses_english_resume_for_upload_and_facts(conn, project, site):
+    _with_english_resume(project)
+    _add_job(conn, site.url("/auto-upload"), description=ENGLISH)
+    english = Tailored(cover_letter="I built Project X in Python.", claims=[Claim(text="x", evidence="Project X in Python")])
+    llm = RecordingLLM(english)
+    _applier(conn, project, llm).run("dry-run")
+    fields = db.get_events(conn, "application_dry_run")[0]["payload"]["fields"]
+    assert any(f["origin"] == "curriculo" and f["value"].endswith("cv-en.docx") for f in fields)
+    assert "Project X in Python" in llm.prompts[0]
+    assert "Projeto X em Python" not in llm.prompts[0]
+
+
+def test_portuguese_job_keeps_main_resume(conn, project, site):
+    _with_english_resume(project)
+    _add_job(conn, site.url("/auto-upload"), description="Buscamos uma pessoa para atuar com Python no time de dados.")
+    _applier(conn, project).run("dry-run")
+    fields = db.get_events(conn, "application_dry_run")[0]["payload"]["fields"]
+    assert any(f["origin"] == "curriculo" and f["value"].endswith("curriculo.docx") for f in fields)
