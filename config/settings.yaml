@@ -51,6 +51,12 @@ notifications:
 auto_reply:
   enabled: false
 
+# Currículo adaptado: para cada candidatura, um PDF com o conteúdo do seu currículo reordenado para a vaga
+# (nada é acrescentado). Fica no pacote para você conferir. upload_tailored: true anexa ele no lugar do original.
+cv:
+  tailor: true
+  upload_tailored: false
+
 # Candidatura sem resposta: rascunho de follow-up depois de after_days dias, no máximo max_attempts vezes.
 # Depois disso fica marcada "sem resposta". O jobbot nunca envia o follow-up: você revisa e manda.
 followups:

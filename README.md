@@ -66,8 +66,9 @@ uv run jobbot report     # relatório do dia
 
 Em dry-run, cada candidatura fica em `data/applications/<id>/`:
 
-- `pacote.md`: link, score, carta e respostas prontas;
+- `pacote.md`: link, score, avaliação da vaga, carta e respostas prontas;
 - `carta.txt`: carta usada no formulário;
+- `curriculo-adaptado.pdf`: seu currículo reordenado para a vaga;
 - `formulario.png`: o formulário preenchido, sem envio e sem anexos.
 
 Quando o resultado parecer bom, passe para `approval`: `uv run jobbot apply --mode approval` mostra cada
@@ -97,6 +98,21 @@ Antes de candidatar, o jobbot confere se a vaga ainda está aberta. Vaga encerra
 
 A ideia da tabela de requisitos, das lacunas e dos sinais de legitimidade veio do
 [career-ops](https://github.com/career-ops-hq/career-ops) (licença MIT).
+
+## Currículo adaptado à vaga
+
+Cada candidatura ganha `curriculo-adaptado.pdf` na pasta do pacote: o seu currículo, no idioma da vaga, com as
+linhas mais relevantes primeiro, em um layout simples que sistemas de recrutamento (ATS) leem bem.
+
+- Na primeira vez, o Claude divide o currículo em seções e linhas. O código confere que cada linha existe no
+  original; o resultado fica em `data/cv/` até o currículo mudar.
+- Para cada vaga, o Claude só escolhe a ordem das linhas. Ele pode reescrever o resumo do topo, mas cada fato
+  precisa de evidência literal, e qualquer tecnologia, empresa ou número que não esteja no currículo derruba a
+  reescrita: fica o resumo original.
+- O pacote mostra quantos requisitos importantes da vaga têm evidência no seu currículo, e quais não têm.
+
+Por padrão o anexo continua sendo o seu PDF original. Para anexar o adaptado, use `cv.upload_tailored: true` no
+`settings.yaml`; para não gerar, `cv.tailor: false`. Ideia do [career-ops](https://github.com/career-ops-hq/career-ops).
 
 ## Fontes
 

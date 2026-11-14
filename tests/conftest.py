@@ -32,3 +32,14 @@ def project(tmp_path, monkeypatch) -> Path:
     write_docx(tmp_path / "documents" / "curriculo.docx", "Projeto X em Python", "Monitor de Algoritmos")
     monkeypatch.setenv("JOBBOT_HOME", str(tmp_path))
     return tmp_path
+
+
+def fake_cv_answer(schema):
+    """Resposta do Claude para o currículo adaptado, com o texto do currículo de teste (curriculo.docx)."""
+    from jobbot.apply.cv_builder import CVEntry, CVPlan, CVSection, StructuredCV
+
+    if schema is CVPlan:
+        return CVPlan()
+    if schema is StructuredCV:
+        return StructuredCV(sections=[CVSection(heading="Monitor de Algoritmos", entries=[CVEntry(title="Projeto X em Python")])])
+    return None

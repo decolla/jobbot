@@ -5,7 +5,7 @@ from datetime import date
 import pytest
 import yaml
 
-from conftest import write_docx
+from conftest import fake_cv_answer, write_docx
 from form_site import FormSite
 from jobbot import db
 from jobbot.apply.base import Applier
@@ -51,8 +51,13 @@ class FakeLLM:
     def __init__(self, *results):
         self.results = list(results)
         self.calls = 0
+        self.cv_calls = 0
 
     def ask(self, prompt, schema, model, system=None):
+        cv_answer = fake_cv_answer(schema)
+        if cv_answer is not None:
+            self.cv_calls += 1
+            return cv_answer
         self.calls += 1
         result = self.results.pop(0) if self.results else _tailored()
         if isinstance(result, Exception):
@@ -395,6 +400,7 @@ def test_manual_source_prepares_material_without_opening_browser(conn, real_proj
         raise AssertionError("não deveria abrir o navegador")
 
     monkeypatch.setattr("jobbot.apply.base.BrowserSession", no_browser)
+    _set_cv(real_project, tailor=False)  # o PDF adaptado usa o navegador local; aqui o que importa é o site da vaga
     job_id = _add_job(conn, "https://www.linkedin.com/jobs/view/1", source="linkedin", apply_path="manual")
     summary = _applier(conn, real_project).run("auto")
     app = _application(conn, job_id)
@@ -473,3 +479,56 @@ def test_closed_job_is_marked_closed_without_spending_llm(conn, real_project, si
     assert (app["status"], summary.closed, summary.blocked) == ("job_closed", 1, 0)
     assert llm.calls == 0
     assert site.posts == []
+
+
+def _set_cv(project, **values):
+    path = project / "config/settings.yaml"
+    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    data.setdefault("cv", {}).update(values)
+    path.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
+
+
+def _upload_value(conn):
+    fields = db.get_events(conn, "application_dry_run")[0]["payload"]["fields"]
+    return next(f["value"] for f in fields if f["origin"] == "curriculo")
+
+
+def test_dry_run_builds_tailored_resume_but_attaches_the_original(conn, project, site):
+    job_id = _add_job(conn, site.url("/auto-upload"))
+    _applier(conn, project).run("dry-run")
+    app_dir = project / "data" / "applications" / str(_application(conn, job_id)["id"])
+    assert (app_dir / "curriculo-adaptado.pdf").read_bytes().startswith(b"%PDF")
+    assert _upload_value(conn).endswith("curriculo.docx")
+    assert "curriculo-adaptado.pdf" in (app_dir / "pacote.md").read_text(encoding="utf-8")
+
+
+def test_tailored_resume_is_attached_when_the_user_chose_it(conn, project, site):
+    _set_cv(project, upload_tailored=True)
+    _add_job(conn, site.url("/auto-upload"))
+    _applier(conn, project).run("dry-run")
+    assert _upload_value(conn).endswith("curriculo-adaptado.pdf")
+
+
+def test_resume_that_cannot_be_tailored_falls_back_to_the_original(conn, project, site):
+    _set_cv(project, upload_tailored=True)
+    _with_english_resume(project)  # o Claude de teste devolve o texto do currículo em português: não confere
+    _add_job(conn, site.url("/auto-upload"), description=ENGLISH)
+    english = Tailored(cover_letter="I built Project X in Python.", claims=[Claim(text="x", evidence="Project X in Python")])
+    _applier(conn, project, FakeLLM(english)).run("dry-run")
+    assert _upload_value(conn).endswith("cv-en.docx")
+    assert any("currículo adaptado" in r["message"] for r in db.recent_logs(conn, "warning", date.today()))
+
+
+def test_tailoring_disabled_spends_no_llm_on_the_resume(conn, project, site):
+    _set_cv(project, tailor=False)
+    _add_job(conn, site.url("/auto-upload"))
+    llm = FakeLLM()
+    _applier(conn, project, llm).run("dry-run")
+    assert llm.cv_calls == 0
+
+
+def test_manual_source_gets_tailored_resume_in_the_pack(conn, real_project):
+    job_id = _add_job(conn, "https://www.linkedin.com/jobs/view/2", source="linkedin", apply_path="manual")
+    _applier(conn, real_project).run("auto")
+    app_dir = real_project / "data" / "applications" / str(_application(conn, job_id)["id"])
+    assert (app_dir / "curriculo-adaptado.pdf").exists()

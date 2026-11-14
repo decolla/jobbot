@@ -146,6 +146,11 @@ class AutoReplySettings(_Strict):
     enabled: bool = False
 
 
+class CVSettings(_Strict):
+    tailor: bool = True  # gera curriculo-adaptado.pdf para cada candidatura
+    upload_tailored: bool = False  # anexa o adaptado no lugar do original
+
+
 class FollowupSettings(_Strict):
     enabled: bool = True
     after_days: int = Field(default=7, ge=1)
@@ -165,6 +170,7 @@ class Settings(_Strict):
     notifications: NotificationSettings = Field(default_factory=NotificationSettings)
     auto_reply: AutoReplySettings = Field(default_factory=AutoReplySettings)
     followups: FollowupSettings = Field(default_factory=FollowupSettings)
+    cv: CVSettings = Field(default_factory=CVSettings)
 
 
 @dataclass(frozen=True)

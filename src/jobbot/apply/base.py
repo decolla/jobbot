@@ -14,6 +14,7 @@ from playwright.sync_api import Error as PlaywrightError
 from playwright.sync_api import Page
 
 from jobbot import db
+from jobbot.apply.cv_builder import CVError, coverage, load_structured_cv, render_html, render_pdf, tailor_cv
 from jobbot.apply.form_filler import BrowserSession, detect_obstacle, fill_form, inspect_form, open_form, submit_form
 from jobbot.apply.form_plan import FillPlan, FormField, plan_fill
 from jobbot.apply.text_tailor import FabricationError, QuestionAnswer, Tailored, build_facts, tailor
@@ -21,6 +22,7 @@ from jobbot.llm import LLMError
 from jobbot.models import Job, detect_language, strip_accents
 from jobbot.profile import ConfigError, Profile, Settings, read_document_text
 from jobbot.scoring.evaluation import evaluation_path
+from jobbot.scoring.llm_scorer import ScoreResult
 
 OBSTACLE_MESSAGES = {
     "captcha": "o site pediu CAPTCHA ou verificação anti-bot; candidate-se à mão pelo link",
@@ -39,6 +41,13 @@ class ApplySummary:
     uncertain: int = 0
     skipped_by_limit: int = 0
     closed: int = 0
+
+
+@dataclass
+class TailoredCV:
+    path: Path
+    covered: list[str]
+    missing: list[str]
 
 
 def _question_key(text: str) -> str:
@@ -73,6 +82,7 @@ class Applier:
         self.submit_timeout_ms = submit_timeout_ms
         self._session: BrowserSession | None = None
         self._facts: dict[str, str] = {}
+        self._cvs: dict[int, TailoredCV | None] = {}
 
     # ---------- entrada ----------
 
@@ -123,7 +133,10 @@ class Applier:
         """Prepara carta e pacote de uma vaga que o usuário vai enviar à mão."""
         row = db.get_job(self.conn, job_id)
         app_id = db.create_application(self.conn, job_id, "manual")
-        self._prepare_manual(app_id, row, ApplySummary())
+        try:
+            self._prepare_manual(app_id, row, ApplySummary())
+        finally:
+            self._close_browser()  # aberto só para salvar o currículo adaptado em PDF
         return self._app_dir(app_id) / "pacote.md"
 
     # ---------- preparação ----------
@@ -140,6 +153,7 @@ class Applier:
 
     def _prepare_manual(self, app_id: int, row: sqlite3.Row, summary: ApplySummary) -> None:
         tailored = self._tailor(app_id, Job.from_row(row), [])
+        self._tailored_cv(app_id, row)
         db.save_application_content(self.conn, app_id, "manual", tailored.cover_letter, {"tailored": tailored.model_dump()})
         self._write_pack(app_id, row, tailored, FillPlan(), "Esta fonte não permite automação: envie pelo link.")
         db.set_application_status(self.conn, app_id, "ready_manual")
@@ -161,7 +175,7 @@ class Applier:
             if not fields:
                 self._block(app_id, row, "formulário não encontrado na página da vaga", summary)
                 return
-            plan, tailored = self._build_plan(app_id, job, fields)
+            plan, tailored = self._build_plan(app_id, row, job, fields)
             db.save_application_content(self.conn, app_id, mode, tailored.cover_letter, self._stored_plan(plan, tailored))
             if plan.blockers:
                 self._block(app_id, row, "; ".join(plan.blockers), summary, plan, tailored)
@@ -171,14 +185,17 @@ class Applier:
             elif mode == "approval":
                 self._ask_approval(app_id, row, page, plan, tailored, summary)
             else:
-                self._dry_run(app_id, row, page, plan, summary)
+                self._dry_run(app_id, row, page, plan, tailored, summary)
         finally:
             page.close()
 
-    def _build_plan(self, app_id: int, job: Job, fields: list[FormField]) -> tuple[FillPlan, Tailored]:
+    def _build_plan(self, app_id: int, row: sqlite3.Row, job: Job, fields: list[FormField]) -> tuple[FillPlan, Tailored]:
         resume = self.root / self.profile.documents.resume_for(_language(job))
         questions = plan_fill(fields, self.profile, resume).questions
         tailored = self._tailor(app_id, job, questions)
+        cv = self._tailored_cv(app_id, row)
+        if cv and self.settings.cv.upload_tailored:
+            resume = cv.path
         letter_path = self._app_dir(app_id) / "carta.txt"
         letter_path.write_text(tailored.cover_letter, encoding="utf-8")
         given = {_question_key(answer.question): answer for answer in tailored.answers}
@@ -200,6 +217,34 @@ class Applier:
                 return previous
         return tailor(job, self._load_facts(job), questions, self.llm, self.settings.llm.writing_model)
 
+    def _tailored_cv(self, app_id: int, row: sqlite3.Row) -> TailoredCV | None:
+        """Currículo reordenado para a vaga, sem conteúdo novo. Se não der, vale o original."""
+        if not self.settings.cv.tailor:
+            return None
+        if app_id in self._cvs:
+            return self._cvs[app_id]
+        job = Job.from_row(row)
+        resume_path = self.profile.documents.resume_for(_language(job))
+        model = self.settings.llm.writing_model
+        result = None
+        try:
+            resume_text = read_document_text(self.root / resume_path)
+            structured = load_structured_cv(self.root, resume_path, resume_text, self.llm, model)
+            adapted = tailor_cv(structured, job, resume_text, self.llm, model)
+            path = self._app_dir(app_id) / "curriculo-adaptado.pdf"
+            page = self._browser().new_page()
+            try:
+                render_pdf(page, render_html(adapted, self.profile, _language(job)), path)
+            finally:
+                page.close()
+            evaluation = ScoreResult.model_validate_json(row["evaluation_json"]) if row["evaluation_json"] else None
+            covered, missing = coverage(evaluation) if evaluation else ([], [])
+            result = TailoredCV(path, covered, missing)
+        except (CVError, LLMError, PlaywrightError, ConfigError) as exc:
+            db.log(self.conn, "warning", "cv", f"{job.title}: currículo adaptado não gerado ({_first_line(exc)}); vale o original")
+        self._cvs[app_id] = result
+        return result
+
     def _load_facts(self, job: Job) -> str:
         path = self.profile.documents.resume_for(_language(job))
         if path not in self._facts:
@@ -209,13 +254,15 @@ class Applier:
 
     # ---------- resultado ----------
 
-    def _dry_run(self, app_id: int, row: sqlite3.Row, page: Page, plan: FillPlan, summary: ApplySummary) -> None:
+    def _dry_run(self, app_id: int, row: sqlite3.Row, page: Page, plan: FillPlan, tailored: Tailored,
+                 summary: ApplySummary) -> None:
         # Alguns formulários sobem o arquivo assim que ele é escolhido; em dry-run nada pode sair da máquina.
         problems = fill_form(page, plan, skip_kinds=("file",))
         if problems:
             self._block(app_id, row, "; ".join(problems), summary, plan)
             return
         self._screenshot(page, app_id, "formulario.png")
+        self._write_pack(app_id, row, tailored, plan, f"Prévia em dry-run: nada foi enviado. Para enviar: jobbot approve {app_id}")
         db.set_application_status(self.conn, app_id, "dry_run")
         db.log_event(self.conn, "application_dry_run", application_id=app_id, job_id=row["id"], payload=self._audit(row, plan))
         summary.dry_run += 1
@@ -338,6 +385,13 @@ class Applier:
         ]
         if evaluation_path(self.root, row["id"]).exists():
             lines.append(f"- Avaliação da vaga (requisitos, lacunas, como lidar): ../../../reports/vagas/{row['id']}.md")
+        cv = self._cvs.get(app_id)
+        if cv:
+            attached = "é o que vai anexado" if self.settings.cv.upload_tailored else "o anexado é o original (cv.upload_tailored)"
+            lines.append(f"- Currículo adaptado à vaga: {cv.path.name} ({attached})")
+            if cv.covered or cv.missing:
+                lines.append(f"- Requisitos importantes com evidência no currículo: {len(cv.covered)} de "
+                             f"{len(cv.covered) + len(cv.missing)}" + (f"; sem evidência: {', '.join(cv.missing)}" if cv.missing else ""))
         lines += [
             "",
             "## Carta de apresentação",

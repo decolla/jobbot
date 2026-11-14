@@ -1,5 +1,6 @@
 import pytest
 
+from conftest import fake_cv_answer
 from jobbot import cli, db, pipeline
 from jobbot.apply import manual
 from jobbot.apply.manual import JobExtract, source_from_url
@@ -20,6 +21,9 @@ class FakeLLM:
         self.prompts = []
 
     def ask(self, prompt, schema, model, system=None):
+        cv_answer = fake_cv_answer(schema)
+        if cv_answer is not None:
+            return cv_answer
         self.prompts.append(prompt)
         result = self.results.pop(0)
         if isinstance(result, Exception):
