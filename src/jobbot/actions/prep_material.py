@@ -52,6 +52,8 @@ def write_prep(root: Path, item_id: int, kind: str, job: Job, material: PrepMate
         "",
         "> Material de treino. A avaliação real é sua: o jobbot não a resolve.",
         "",
+        *(["Para perguntas comportamentais, treine com as suas histórias: [historias.md](../historias.md) "
+           "(gere ou atualize com `jobbot stories`).", ""] if kind == "interview" else []),
         "## Formato",
         "",
         material.format_summary,

@@ -9,6 +9,8 @@ from datetime import date
 
 from jobbot import db, pipeline
 from jobbot.actions.followup import plan_followups
+from jobbot.actions.stories import build_stories, write_stories
+from jobbot.apply.text_tailor import build_facts
 from jobbot.apply import manual
 from jobbot.apply.base import Applier, ApplySummary, mark_done, recover_interrupted, reject_application
 from jobbot.apply.form_filler import login_interactively
@@ -16,7 +18,15 @@ from jobbot.llm import LLMError
 from jobbot.notify import notify
 from jobbot.notify.email import send_email
 from jobbot.notify.report import render_summary, write_report
-from jobbot.profile import ConfigError, check_setup, load_env, load_profile, load_settings, project_root
+from jobbot.profile import (
+    ConfigError,
+    check_setup,
+    load_env,
+    load_profile,
+    load_settings,
+    project_root,
+    read_document_text,
+)
 from jobbot.tracking.mailbox import Mailbox, MailboxError
 from jobbot.tracking.status_checker import check_open_jobs, run_tracking
 
@@ -210,6 +220,25 @@ def _write_report(root, settings) -> tuple:
     return path, render_summary(data, path)
 
 
+def cmd_stories(args: argparse.Namespace) -> int:
+    root = project_root()
+    settings = load_settings(root)
+    profile = load_profile(root)
+    resume_text = read_document_text(root / profile.documents.resume)
+    # Os dois currículos são documentos seus: um fato de qualquer um deles vale.
+    others = [profile.documents.resume_en, *profile.documents.extras] if profile.documents.resume_en else profile.documents.extras
+    extras = [read_document_text(root / path) for path in others]
+    try:
+        kept, dropped = build_stories(build_facts(profile, resume_text, extras), pipeline.build_llm(settings),
+                                      settings.llm.writing_model)
+    except LLMError as exc:
+        print(f"[FALHA] Claude: {exc}")
+        return 1
+    path = write_stories(root, kept, dropped)
+    print(f"{len(kept)} história(s) em {path}" + (f" | {len(dropped)} descartada(s) pela conferência" if dropped else ""))
+    return 0
+
+
 def cmd_report(args: argparse.Namespace) -> int:
     root = project_root()
     path, summary = _write_report(root, load_settings(root))
@@ -309,6 +338,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     commands.add_parser("track", help="acompanha e-mails do processo e vagas encerradas").set_defaults(func=cmd_track)
     commands.add_parser("report", help="gera o relatório do dia em reports/").set_defaults(func=cmd_report)
+    commands.add_parser("stories", help="gera suas histórias para entrevista a partir dos documentos").set_defaults(
+        func=cmd_stories)
     commands.add_parser("run-daily", help="busca, pontua, candidata, acompanha e gera o relatório").set_defaults(
         func=cmd_run_daily
     )

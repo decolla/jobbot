@@ -178,6 +178,11 @@ Teste, vídeo, entrevista e proposta viram **pendência** com prazo e link quand
 e entrevista, o jobbot gera material de treino em `reports/prep/`. Quando terminar, rode `jobbot resolve <id>`
 com o número que aparece em `jobbot status`. Uma recusa fecha as pendências daquela candidatura.
 
+**Histórias para entrevista**: `jobbot stories` gera `reports/historias.md`, com 4 a 8 histórias no formato
+STAR tiradas dos seus documentos, para perguntas comportamentais ("fale de um desafio técnico"). Cada história cita
+o trecho de onde veio; a que traz número, nome ou ferramenta fora dos documentos é descartada e listada. A
+reflexão, o que você aprendeu, fica para você. O material de entrevista aponta para esse arquivo.
+
 **Resposta automática** (desligada por padrão; `auto_reply.enabled`):
 
 - Responde só "ainda tem interesse?" e "qual sua disponibilidade?", com modelo fixo e a `availability` do perfil.
@@ -204,6 +209,8 @@ follow-up aberto. O jobbot nunca envia follow-up: você revisa e manda para quem
 - novidades nos processos;
 - enviadas hoje;
 - vagas novas acima do score;
+- funil: quantas enviadas tiveram resposta, por fonte e por faixa de score. Com o tempo, mostra se o score e as
+  fontes estão ajudando;
 - erros do dia.
 
 Para receber um resumo, ligue `notifications.telegram` ou `notifications.email` e preencha o `.env`. Para o
@@ -242,6 +249,7 @@ Os arquivos de exemplo ficam em `src/jobbot/scheduler/`. Nada é agendado sem vo
 | `jobbot track` | Acompanha e-mails e portais |
 | `jobbot resolve <id>` | Fecha uma pendência |
 | `jobbot report` | Gera o relatório do dia |
+| `jobbot stories` | Gera suas histórias para entrevista |
 | `jobbot run-daily` | Tudo em sequência |
 
 ## Auditoria

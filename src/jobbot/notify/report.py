@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
 
@@ -20,6 +20,22 @@ MAX_NEW_JOBS = 30
 MAX_LOG_LINES = 20
 MAX_SUMMARY_ITEMS = 10
 MAX_SUMMARY_CHARS = 3500
+# Etapas que não são resposta da empresa.
+NOT_AN_ANSWER = {"applied", "job_closed", "no_response"}
+SCORE_BANDS = (("<70", 0, 69), ("70-79", 70, 79), ("80-89", 80, 89), ("90+", 90, 100))
+CALIBRATION_MIN = 10
+
+
+@dataclass
+class Funnel:
+    submitted: int = 0
+    answered: int = 0
+    interviews: int = 0
+    offers: int = 0
+    rejected: int = 0
+    no_response: int = 0
+    by_source: dict[str, list[int]] = field(default_factory=dict)  # fonte -> [com resposta, enviadas]
+    by_band: dict[str, list[int]] = field(default_factory=dict)
 
 
 @dataclass
@@ -39,6 +55,7 @@ class DailyData:
     uncertain: list[sqlite3.Row]
     errors: list[sqlite3.Row]
     warnings: list[sqlite3.Row]
+    funnel: Funnel = field(default_factory=Funnel)
 
 
 def _news(conn: sqlite3.Connection, day: str) -> list[tuple[str, str, str]]:
@@ -59,6 +76,30 @@ def _news(conn: sqlite3.Connection, day: str) -> list[tuple[str, str, str]]:
             label = f"{label}? confira o e-mail de {payload.get('from', '')}"
         news.append((label, f"{row['title']} ({row['company']})", payload.get("subject", "")))
     return news
+
+
+def _funnel(conn: sqlite3.Connection) -> Funnel:
+    """Quantas candidaturas enviadas tiveram resposta, no total, por fonte e por faixa de score."""
+    funnel = Funnel()
+    rows = conn.execute(
+        """SELECT a.id, j.source, j.score, GROUP_CONCAT(s.stage) AS stages
+           FROM applications a JOIN jobs j ON j.id = a.job_id LEFT JOIN stages s ON s.application_id = a.id
+           WHERE a.status = 'submitted' GROUP BY a.id"""
+    ).fetchall()
+    for row in rows:
+        stages = set((row["stages"] or "").split(","))
+        answered = bool(stages - NOT_AN_ANSWER - {""})
+        funnel.submitted += 1
+        funnel.answered += answered
+        funnel.interviews += bool(stages & {"test", "video", "interview"})
+        funnel.offers += "offer" in stages
+        funnel.rejected += "rejected" in stages
+        funnel.no_response += "no_response" in stages
+        band = next((label for label, low, high in SCORE_BANDS if low <= (row["score"] or 0) <= high), "<70")
+        for counts in (funnel.by_source.setdefault(row["source"], [0, 0]), funnel.by_band.setdefault(band, [0, 0])):
+            counts[0] += answered
+            counts[1] += 1
+    return funnel
 
 
 def collect(conn: sqlite3.Connection, day: date, min_score: int) -> DailyData:
@@ -88,6 +129,7 @@ def collect(conn: sqlite3.Connection, day: date, min_score: int) -> DailyData:
         uncertain=db.applications_by_status(conn, "submit_uncertain"),
         errors=db.recent_logs(conn, "error", day),
         warnings=db.recent_logs(conn, "warning", day),
+        funnel=_funnel(conn),
     )
 
 
@@ -119,6 +161,24 @@ def _evaluation(root: Path, job_id: int) -> str:
 
 def _section(title: str, lines: list[str], empty: str = "Nenhuma.") -> list[str]:
     return [f"## {title}", "", *(lines or [empty]), ""]
+
+
+def _funnel_lines(funnel: Funnel) -> list[str]:
+    if not funnel.submitted:
+        return []
+    rate = round(100 * funnel.answered / funnel.submitted)
+    lines = [
+        f"- Enviadas: {funnel.submitted} | com resposta: {funnel.answered} ({rate}%) | "
+        f"entrevistas e testes: {funnel.interviews} | propostas: {funnel.offers} | recusas: {funnel.rejected} | "
+        f"sem resposta: {funnel.no_response}",
+        "- Resposta por fonte: " + " · ".join(f"{s}: {a} de {n}" for s, (a, n) in sorted(funnel.by_source.items())),
+        "- Resposta por score: " + " · ".join(f"{label}: {funnel.by_band[label][0]} de {funnel.by_band[label][1]}"
+                                             for label, _, _ in SCORE_BANDS if label in funnel.by_band),
+    ]
+    if funnel.submitted >= CALIBRATION_MIN:
+        lines.append("- Se as faixas de score mais altas não têm mais resposta que as outras, o score não está "
+                     "ajudando: revise min_score, o perfil ou as fontes.")
+    return lines
 
 
 def render_report(data: DailyData, root: Path) -> str:
@@ -179,6 +239,7 @@ def render_report(data: DailyData, root: Path) -> str:
     lines += _section("Novidades nos processos", news)
     lines += _section("Enviadas hoje", submitted)
     lines += _section("Vagas novas acima do score mínimo", new_jobs)
+    lines += _section("Funil", _funnel_lines(data.funnel), "Nenhuma candidatura enviada ainda.")
     lines += _section("Erros e avisos", logs, "Nenhum.")
     return "\n".join(lines)
 

@@ -57,6 +57,27 @@ def build_facts(profile: Profile, resume_text: str, extra_texts: list[str]) -> s
     return f"{header}{candidate_summary(profile)}\n{documents}"
 
 
+TERM = re.compile(r"[A-Za-zÀ-ÿ.#+][\w.#+/-]*")
+
+
+def unsupported_terms(text: str, facts: str) -> list[str]:
+    """Números e nomes próprios ou técnicos do texto que não aparecem nos fatos.
+
+    Nome técnico: maiúscula no meio da frase, símbolo ou dígito ("Kubernetes", "C#", "Node.js"). No começo
+    da frase, só a maiúscula no meio da palavra ("GraphQL") denuncia.
+    """
+    facts_key = match_key(facts)
+    found = [f"número {n}" for n in sorted(set(re.findall(r"\d+", text)) - set(re.findall(r"\d+", facts)))]
+    for sentence in re.split(r"(?<=[.!?])\s+", text):
+        for position, token in enumerate(TERM.findall(sentence)):
+            token = token.rstrip(".,;:")
+            capital = token[:1].isupper() if position else any(c.isupper() for c in token[1:])
+            technical = capital or any(c in token for c in "#+.") or any(c.isdigit() for c in token)
+            if token and technical and not token.isdigit() and match_key(token) not in facts_key:
+                found.append(token)
+    return found
+
+
 def _numbers(text: str) -> set[str]:
     return set(re.findall(r"\d+", text))
 

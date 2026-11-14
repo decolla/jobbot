@@ -18,6 +18,7 @@ from pathlib import Path
 from playwright.sync_api import Page
 from pydantic import BaseModel, Field, ValidationError
 
+from jobbot.apply.text_tailor import unsupported_terms
 from jobbot.models import Job, match_key
 from jobbot.profile import Profile
 from jobbot.scoring.llm_scorer import MAX_JOB_CHARS, ScoreResult, neutralize_tags
@@ -30,7 +31,6 @@ SYSTEM = (
 IMPORTANT = ("critical", "high", "meaningful")
 # Muda quando a extração muda: currículos já em cache são extraídos de novo.
 EXTRACTION_VERSION = 2
-TERM = re.compile(r"[A-Za-zÀ-ÿ.#+][\w.#+/-]*")
 
 
 class CVError(Exception):
@@ -173,18 +173,7 @@ def _summary_ok(plan: CVPlan, resume_text: str) -> bool:
         return False
     if any(not c.evidence.strip() or match_key(c.evidence) not in resume_key for c in plan.claims):
         return False
-    if set(re.findall(r"\d+", plan.summary)) - set(re.findall(r"\d+", resume_text)):
-        return False
-    for sentence in re.split(r"(?<=[.!?])\s+", plan.summary):
-        for position, token in enumerate(TERM.findall(sentence)):
-            token = token.rstrip(".,;:")
-            # Maiúscula no meio da frase, símbolo ou dígito: nome de tecnologia, empresa ou ferramenta.
-            # No começo da frase, só a maiúscula no meio da palavra ("GraphQL") denuncia.
-            capital = token[:1].isupper() if position else any(c.isupper() for c in token[1:])
-            technical = capital or any(c in token for c in "#+.") or any(c.isdigit() for c in token)
-            if token and technical and match_key(token) not in resume_key:
-                return False
-    return True
+    return not unsupported_terms(plan.summary, resume_text)
 
 
 def _reorder(items: list[str], order: list[int]) -> list[str]:

@@ -191,3 +191,18 @@ def test_follow_up_shows_draft_link_and_no_response_is_news(conn, project):
     text = _report(conn, project)
     assert "[rascunho da mensagem](followups/1-1.md)" in text
     assert "- Sem resposta: Estágio Dev 1 (Acme)" in text
+
+
+def test_funnel_shows_response_rates_by_source_and_score(conn, project):
+    for n, (source, score, stage) in enumerate([("lever", 75, None), ("lever", 92, "interview"),
+                                                ("greenhouse", 85, "rejected"), ("greenhouse", 95, "no_response")], 1):
+        app_id = db.create_application(conn, _job(conn, n, source=source, score=score, status="scored"), "auto")
+        db.mark_submitted(conn, app_id)
+        if stage:
+            db.add_stage(conn, app_id, stage, "email")
+    text = _report(conn, project)
+    assert "## Funil" in text
+    assert "Enviadas: 4 | com resposta: 2 (50%)" in text
+    assert "entrevistas e testes: 1 | propostas: 0 | recusas: 1 | sem resposta: 1" in text
+    assert "greenhouse: 1 de 2" in text and "lever: 1 de 2" in text
+    assert "70-79: 0 de 1" in text and "80-89: 1 de 1" in text and "90+: 1 de 2" in text
