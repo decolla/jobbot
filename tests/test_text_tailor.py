@@ -9,6 +9,7 @@ from jobbot.apply.text_tailor import (
     build_facts,
     build_prompt,
     tailor,
+    unsupported_terms,
     verify,
 )
 from jobbot.models import Job
@@ -144,3 +145,13 @@ def test_verify_ignores_spaces_lost_or_added_by_pdf_extraction():
     claims = [Claim(text="a", evidence="fluxos com Apache Kafka"), Claim(text="b", evidence="Full-stack com .NET"),
               Claim(text="c", evidence="AI integration")]
     assert verify(_tailored(claims=claims), facts, _job()) == []
+
+
+@pytest.mark.parametrize("term", ["Java", "Rust", "Go", "React"])
+def test_term_inside_another_word_is_not_supported(term):
+    facts = "Projetos em JavaScript, Django e Reactive Streams. Código trusted, feito há anos (ago)."
+    assert term in unsupported_terms(f"Trabalho com {term} no dia a dia.", facts)
+
+
+def test_long_term_glued_by_the_pdf_is_still_supported():
+    assert unsupported_terms("Pipelines com Apache Kafka.", "Implementou fluxos comApache Kafka.") == []

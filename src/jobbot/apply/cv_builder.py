@@ -30,7 +30,13 @@ SYSTEM = (
 )
 IMPORTANT = ("critical", "high", "meaningful")
 # Muda quando a extração muda: currículos já em cache são extraídos de novo.
-EXTRACTION_VERSION = 2
+EXTRACTION_VERSION = 3
+# Fração do texto do currículo que a extração precisa cobrir. Fica de fora só o cabeçalho de contato.
+MIN_EXTRACTED_SHARE = 0.8
+# Título, empresa e período de um item precisam estar perto um do outro no original (em caracteres).
+ENTRY_WINDOW = 300
+# Evidência curta ("Docker") sustenta qualquer frase; no resumo do currículo, exige um trecho de verdade.
+MIN_SUMMARY_EVIDENCE = 15
 
 
 class CVError(Exception):
@@ -80,9 +86,31 @@ def _strings(cv: StructuredCV) -> list[str]:
     return [value for value in values if value.strip()]
 
 
-def _not_in_resume(cv: StructuredCV, resume_text: str) -> list[str]:
+def _positions(text: str, part: str) -> list[int]:
+    found, start = [], text.find(part)
+    while start >= 0:
+        found.append(start)
+        start = text.find(part, start + 1)
+    return found
+
+
+def _extraction_problems(cv: StructuredCV, resume_text: str) -> list[str]:
     resume_key = match_key(resume_text)
-    return [value for value in _strings(cv) if match_key(value) not in resume_key]
+    problems = [repr(value) for value in _strings(cv) if match_key(value) not in resume_key]
+    if problems:
+        return [f"trechos que não estão no currículo: {', '.join(problems)}"]
+    for section in cv.sections:
+        for entry in section.entries:
+            # Período ou empresa de um item colados no título de outro: um fato que o currículo não diz.
+            keys = [match_key(v) for v in (entry.organization, entry.period, entry.location) if v.strip()]
+            anchors = _positions(resume_key, match_key(entry.title))
+            if keys and not any(all(any(abs(p - a) <= ENTRY_WINDOW for p in _positions(resume_key, k)) for k in keys)
+                                for a in anchors):
+                problems.append(f"{entry.title!r} ficou com empresa, local ou período de outro item")
+    extracted = sum(len(match_key(value)) for value in _strings(cv))
+    if extracted < MIN_EXTRACTED_SHARE * len(resume_key):
+        problems.append("extração incompleta: parte do currículo ficou de fora")
+    return problems
 
 
 def _tidy(text: str) -> str:
@@ -104,8 +132,8 @@ def _tidied(cv: StructuredCV) -> StructuredCV:
 def _extract_prompt(resume_text: str, problems: list[str]) -> str:
     feedback = ""
     if problems:
-        feedback = ("\n\nA tentativa anterior foi recusada porque estes trechos não estão no currículo. "
-                    "Copie o texto exatamente:\n- " + "\n- ".join(problems))
+        feedback = ("\n\nA tentativa anterior foi recusada. Copie o texto exatamente, sem deixar nada de fora e "
+                    "sem trocar dados entre itens:\n- " + "\n- ".join(problems))
     return (
         "Divida o currículo em resumo e seções (formação, experiência, projetos, competências, certificações...), "
         "na ordem em que aparecem. Copie cada trecho exatamente como está, inclusive acentos. A única correção "
@@ -122,10 +150,10 @@ def extract_cv(resume_text: str, llm, model: str) -> StructuredCV:
     problems: list[str] = []
     for _ in range(2):
         cv = llm.ask(_extract_prompt(resume_text, problems), StructuredCV, model=model, system=SYSTEM)
-        problems = _not_in_resume(cv, resume_text)
+        problems = _extraction_problems(cv, resume_text)
         if not problems:
             return _tidied(cv)
-    raise CVError("trechos que não estão no currículo: " + "; ".join(problems))
+    raise CVError("; ".join(problems))
 
 
 def load_structured_cv(root: Path, resume_path: str, resume_text: str, llm, model: str) -> StructuredCV:
@@ -171,7 +199,8 @@ def _summary_ok(plan: CVPlan, resume_text: str) -> bool:
     resume_key = match_key(resume_text)
     if not plan.summary.strip() or not plan.claims:
         return False
-    if any(not c.evidence.strip() or match_key(c.evidence) not in resume_key for c in plan.claims):
+    if any(len(match_key(c.evidence)) < MIN_SUMMARY_EVIDENCE or match_key(c.evidence) not in resume_key
+           for c in plan.claims):
         return False
     return not unsupported_terms(plan.summary, resume_text)
 

@@ -35,7 +35,8 @@ def _items(conn, app_id):
 
 def _age_items(conn, app_id, days):
     stamp = (datetime.combine(TODAY - timedelta(days=days), datetime.min.time()).astimezone()).isoformat()
-    conn.execute("UPDATE action_items SET created_at = ? WHERE application_id = ?", (stamp, app_id))
+    conn.execute("UPDATE action_items SET created_at = ?, completed_at = ? WHERE application_id = ?",
+                 (stamp, stamp, app_id))
 
 
 def _plan(conn, project, **over):
@@ -64,9 +65,28 @@ def test_recent_application_has_no_follow_up(conn, project):
 
 def test_any_answer_means_no_follow_up(conn, project):
     app_id = _submitted(conn, days_ago=10)
-    db.add_stage(conn, app_id, "screening", "email")
+    db.add_stage(conn, app_id, "interview", "email")
     _plan(conn, project)
     assert _items(conn, app_id) == []
+
+
+def test_automatic_acknowledgment_is_not_an_answer(conn, project):
+    app_id = _submitted(conn, days_ago=10)
+    db.add_stage(conn, app_id, "screening", "email")  # "recebemos sua candidatura"
+    _plan(conn, project)
+    assert len(_items(conn, app_id)) == 1
+
+
+def test_cadence_counts_from_when_the_follow_up_was_done(conn, project):
+    app_id = _submitted(conn, days_ago=30)
+    _plan(conn, project)
+    db.complete_action_items(conn, app_id, ["follow_up"])
+    assert _items(conn, app_id)[0]["completed_at"]
+    created = (datetime.combine(TODAY - timedelta(days=20), datetime.min.time()).astimezone()).isoformat()
+    done = (datetime.combine(TODAY - timedelta(days=2), datetime.min.time()).astimezone()).isoformat()
+    conn.execute("UPDATE action_items SET created_at = ?, completed_at = ? WHERE application_id = ?", (created, done, app_id))
+    _plan(conn, project)
+    assert len(_items(conn, app_id)) == 1  # criado há 20 dias, mas feito há 2
 
 
 def test_running_twice_does_not_duplicate(conn, project):

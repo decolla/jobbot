@@ -166,3 +166,27 @@ def test_entry_with_a_single_line_and_no_details_is_rendered_inline():
     html = render_html(_cv(), _profile(), "pt")
     assert '<span class="head">Linguagens:</span> C#, Python, SQL' in html
     assert "<li>Pipelines com Apache Kafka e Avro.</li>" in html  # experiência continua em tópicos
+
+
+def test_extraction_that_leaves_out_part_of_the_resume_is_refused():
+    partial = _cv()
+    partial.sections = partial.sections[1:]  # some a experiência inteira
+    with pytest.raises(CVError, match="incompleta"):
+        extract_cv(RESUME, FakeLLM(partial, partial), "sonnet")
+
+
+def test_extraction_that_moves_a_period_to_another_entry_is_refused():
+    filler = "Outro texto qualquer do currículo para afastar os itens. " * 12
+    resume = RESUME + filler + "PROJETOS\nRobô de Visão Computacional, Liga de Robótica, 2023\n•Pipelines de imagem.\n"
+    mixed = _cv()
+    mixed.sections.append(CVSection(heading="Projetos", entries=[CVEntry(
+        title="Robô de Visão Computacional", organization="Laboratório X", period="2025 - Presente",
+        bullets=["Pipelines de imagem."])]))
+    mixed.sections.append(CVSection(heading="Experiência", entries=[CVEntry(title="Texto", bullets=[filler.strip()])]))
+    with pytest.raises(CVError, match="Robô de Visão Computacional"):
+        extract_cv(resume, FakeLLM(mixed, mixed), "sonnet")
+
+
+def test_summary_claim_with_trivial_evidence_keeps_the_original():
+    plan = CVPlan(summary="Engenheiro de Software com Docker.", claims=[SummaryClaim(text="Docker", evidence="Docker")])
+    assert tailor_cv(_cv(), _job(), RESUME, FakeLLM(plan), "sonnet").summary == _cv().summary

@@ -16,8 +16,8 @@ from jobbot.models import detect_language
 from jobbot.profile import Profile, Settings
 
 KIND = "follow_up"
-# Etapas que não são resposta da empresa: o envio em si.
-NOT_AN_ANSWER = {"applied"}
+# Etapas que não são resposta da empresa: o envio em si e o "recebemos sua candidatura" automático.
+NOT_AN_ANSWER = {"applied", "screening"}
 
 DRAFTS = {
     "pt": (
@@ -88,7 +88,11 @@ def plan_followups(conn: sqlite3.Connection, root: Path, profile: Profile, setti
                              (app["id"], KIND)).fetchall()
         if any(item["status"] == "open" for item in items):
             continue
-        since = _day(items[-1]["created_at"]) if items else _day(app["submitted_at"])
+        if items:
+            last = items[-1]
+            since = _day(last["completed_at"] or last["created_at"])  # a semana conta de quando foi feito
+        else:
+            since = _day(app["submitted_at"])
         if (today - since).days < config.after_days:
             continue
         if len(items) >= config.max_attempts:

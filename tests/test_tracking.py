@@ -601,6 +601,13 @@ def test_resolve_command_closes_action(project, capsys):
 def test_answer_by_email_closes_open_follow_up(conn, project):
     app_id = _submitted(conn)
     db.add_action_item(conn, app_id, "follow_up", "Follow-up 1: Estágio Dev")
-    _track(conn, project, FakeMailbox(_message(subject="Recebemos sua candidatura na Acme", text="Seu perfil está em análise.")))
+    _track(conn, project, FakeMailbox(_message(text="Queremos agendar uma entrevista")))
     open_kinds = [i["kind"] for i in db.open_action_items(conn)]
     assert "follow_up" not in open_kinds
+
+
+def test_automatic_acknowledgment_keeps_follow_up_open(conn, project):
+    app_id = _submitted(conn)
+    db.add_action_item(conn, app_id, "follow_up", "Follow-up 1: Estágio Dev")
+    _track(conn, project, FakeMailbox(_message(subject="Recebemos sua candidatura na Acme", text="Seu perfil está em análise.")))
+    assert "follow_up" in [i["kind"] for i in db.open_action_items(conn)]

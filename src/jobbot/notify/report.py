@@ -20,8 +20,8 @@ MAX_NEW_JOBS = 30
 MAX_LOG_LINES = 20
 MAX_SUMMARY_ITEMS = 10
 MAX_SUMMARY_CHARS = 3500
-# Etapas que não são resposta da empresa.
-NOT_AN_ANSWER = {"applied", "job_closed", "no_response"}
+# Etapas que não são resposta da empresa. "Em análise" costuma ser a confirmação automática do envio.
+NOT_AN_ANSWER = {"applied", "screening", "job_closed", "no_response"}
 SCORE_BANDS = (("<70", 0, 69), ("70-79", 70, 79), ("80-89", 80, 89), ("90+", 90, 100))
 CALIBRATION_MIN = 10
 
@@ -62,13 +62,18 @@ def _news(conn: sqlite3.Connection, day: str) -> list[tuple[str, str, str]]:
     rows = conn.execute(
         """SELECT e.kind, e.payload_json, j.title, j.company FROM events e
            JOIN applications a ON a.id = e.application_id JOIN jobs j ON j.id = a.job_id
-           WHERE e.kind IN ('stage_detected', 'stage_unverified', 'job_closed', 'no_response') AND substr(e.created_at, 1, 10) = ?
+           WHERE e.kind IN ('stage_detected', 'stage_unverified', 'job_closed', 'no_response', 'application_job_closed')
+             AND substr(e.created_at, 1, 10) = ?
            ORDER BY e.id""",
         (day,),
     ).fetchall()
     news = []
     for row in rows:
         payload = json.loads(row["payload_json"] or "{}")
+        if row["kind"] == "application_job_closed":
+            # Detectado pela página (404 ou aviso de erro): pode ser engano, então vai o link para conferir.
+            news.append(("Vaga encerrada antes do envio", f"{row['title']} ({row['company']}), confira {payload.get('url', '')}", ""))
+            continue
         stage = payload.get("stage", "job_closed") if row["kind"] != "job_closed" else "job_closed"
         label = STAGE_LABELS.get(stage, stage)
         if row["kind"] == "stage_unverified":
@@ -94,7 +99,7 @@ def _funnel(conn: sqlite3.Connection) -> Funnel:
         funnel.interviews += bool(stages & {"test", "video", "interview"})
         funnel.offers += "offer" in stages
         funnel.rejected += "rejected" in stages
-        funnel.no_response += "no_response" in stages
+        funnel.no_response += "no_response" in stages and not answered
         band = next((label for label, low, high in SCORE_BANDS if low <= (row["score"] or 0) <= high), "<70")
         for counts in (funnel.by_source.setdefault(row["source"], [0, 0]), funnel.by_band.setdefault(band, [0, 0])):
             counts[0] += answered

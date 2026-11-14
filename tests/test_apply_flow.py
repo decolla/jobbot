@@ -532,3 +532,29 @@ def test_manual_source_gets_tailored_resume_in_the_pack(conn, real_project):
     _applier(conn, real_project).run("auto")
     app_dir = real_project / "data" / "applications" / str(_application(conn, job_id)["id"])
     assert (app_dir / "curriculo-adaptado.pdf").exists()
+    assert "anexe este ou o original ao enviar" in (app_dir / "pacote.md").read_text(encoding="utf-8")
+
+
+def test_approve_reuses_the_resume_shown_for_approval(conn, real_project, site):
+    job_id = _add_job(conn, site.url("/simple"))
+    _applier(conn, real_project).run("approval")
+    app_id = _application(conn, job_id)["id"]
+    assert (real_project / "data" / "applications" / str(app_id) / "curriculo-adaptado.pdf").exists()
+    llm = FakeLLM()
+    assert _applier(conn, real_project, llm).approve(app_id) == "submitted"
+    assert llm.cv_calls == 0  # o currículo aprovado é o mesmo enviado, sem gerar outro
+
+
+def test_approval_preview_shows_the_tailored_resume(conn, real_project, site):
+    _add_job(conn, site.url("/simple"))
+    previews = []
+    _applier(conn, real_project, confirm=lambda preview: previews.append(preview) or False).run("approval")
+    assert "curriculo-adaptado.pdf" in previews[0]
+
+
+def test_broken_evaluation_does_not_stop_the_application(conn, project, site):
+    job_id = _add_job(conn, site.url("/simple"))
+    db.set_score(conn, job_id, 90, "aderente", "scored", evaluation_json="{quebrado")
+    _applier(conn, project).run("dry-run")
+    assert _application(conn, job_id)["status"] == "dry_run"
+    assert any("currículo adaptado" in r["message"] for r in db.recent_logs(conn, "warning", date.today()))

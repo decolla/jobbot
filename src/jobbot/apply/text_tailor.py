@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 import yaml
 from pydantic import BaseModel, Field
 
-from jobbot.models import Job, match_key
+from jobbot.models import Job, match_key, strip_accents
 from jobbot.profile import Profile
 from jobbot.scoring.llm_scorer import MAX_JOB_CHARS, candidate_summary, neutralize_tags, scrub_contacts
 
@@ -57,6 +57,7 @@ def build_facts(profile: Profile, resume_text: str, extra_texts: list[str]) -> s
     return f"{header}{candidate_summary(profile)}\n{documents}"
 
 
+GLUED_MIN_CHARS = 6
 TERM = re.compile(r"[A-Za-zÀ-ÿ.#+][\w.#+/-]*")
 
 
@@ -66,16 +67,25 @@ def unsupported_terms(text: str, facts: str) -> list[str]:
     Nome técnico: maiúscula no meio da frase, símbolo ou dígito ("Kubernetes", "C#", "Node.js"). No começo
     da frase, só a maiúscula no meio da palavra ("GraphQL") denuncia.
     """
-    facts_key = match_key(facts)
+    facts_plain, facts_key = strip_accents(facts), match_key(facts)
     found = [f"número {n}" for n in sorted(set(re.findall(r"\d+", text)) - set(re.findall(r"\d+", facts)))]
     for sentence in re.split(r"(?<=[.!?])\s+", text):
         for position, token in enumerate(TERM.findall(sentence)):
             token = token.rstrip(".,;:")
             capital = token[:1].isupper() if position else any(c.isupper() for c in token[1:])
             technical = capital or any(c in token for c in "#+.") or any(c.isdigit() for c in token)
-            if token and technical and not token.isdigit() and match_key(token) not in facts_key:
+            if token and technical and not token.isdigit() and not _term_in(token, facts_plain, facts_key):
                 found.append(token)
     return found
+
+
+def _term_in(token: str, facts_plain: str, facts_key: str) -> bool:
+    """O termo aparece como palavra inteira: "Java" não vale por causa de "JavaScript"."""
+    plain = strip_accents(token)
+    if re.search(rf"(?<![a-z0-9]){re.escape(plain)}(?![a-z0-9])", facts_plain):
+        return True
+    # A extração de PDF gruda palavras ("comApache"). Só termos longos, que não surgem por acaso dentro de outro.
+    return len(match_key(token)) >= GLUED_MIN_CHARS and match_key(token) in facts_key
 
 
 def _numbers(text: str) -> set[str]:

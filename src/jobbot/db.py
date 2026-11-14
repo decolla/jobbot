@@ -67,7 +67,8 @@ CREATE TABLE IF NOT EXISTS action_items (
     due_date TEXT,
     prep_path TEXT,
     status TEXT NOT NULL DEFAULT 'open',
-    created_at TEXT NOT NULL
+    created_at TEXT NOT NULL,
+    completed_at TEXT
 );
 
 CREATE TABLE IF NOT EXISTS events (
@@ -114,7 +115,7 @@ def connect(path: Path) -> sqlite3.Connection:
 
 
 # Colunas criadas depois da primeira versão: bancos antigos ganham a coluna sem perder dados.
-MIGRATIONS = {"jobs": {"evaluation_json": "TEXT"}}
+MIGRATIONS = {"jobs": {"evaluation_json": "TEXT"}, "action_items": {"completed_at": "TEXT"}}
 
 
 def _migrate(conn: sqlite3.Connection) -> None:
@@ -319,14 +320,16 @@ def set_action_prep(conn: sqlite3.Connection, item_id: int, prep_path: str) -> N
 
 
 def complete_action_item(conn: sqlite3.Connection, item_id: int) -> bool:
-    return conn.execute("UPDATE action_items SET status = 'done' WHERE id = ? AND status = 'open'", (item_id,)).rowcount == 1
+    return conn.execute("UPDATE action_items SET status = 'done', completed_at = ? WHERE id = ? AND status = 'open'",
+                        (_now(), item_id)).rowcount == 1
 
 
 def complete_action_items(conn: sqlite3.Connection, app_id: int, kinds: list[str]) -> None:
     marks = ",".join("?" * len(kinds))
     conn.execute(
-        f"UPDATE action_items SET status = 'done' WHERE application_id = ? AND status = 'open' AND kind IN ({marks})",
-        (app_id, *kinds),
+        f"UPDATE action_items SET status = 'done', completed_at = ? "
+        f"WHERE application_id = ? AND status = 'open' AND kind IN ({marks})",
+        (_now(), app_id, *kinds),
     )
 
 

@@ -227,20 +227,22 @@ class Applier:
         resume_path = self.profile.documents.resume_for(_language(job))
         model = self.settings.llm.writing_model
         result = None
+        path = self._app_dir(app_id) / "curriculo-adaptado.pdf"
         try:
-            resume_text = read_document_text(self.root / resume_path)
-            structured = load_structured_cv(self.root, resume_path, resume_text, self.llm, model)
-            adapted = tailor_cv(structured, job, resume_text, self.llm, model)
-            path = self._app_dir(app_id) / "curriculo-adaptado.pdf"
-            page = self._browser().new_page()
-            try:
-                render_pdf(page, render_html(adapted, self.profile, _language(job)), path)
-            finally:
-                page.close()
+            # Na aprovação, vale o currículo que o usuário já viu: não gera outro.
+            if not path.exists():
+                resume_text = read_document_text(self.root / resume_path)
+                structured = load_structured_cv(self.root, resume_path, resume_text, self.llm, model)
+                adapted = tailor_cv(structured, job, resume_text, self.llm, model)
+                page = self._browser().new_page()
+                try:
+                    render_pdf(page, render_html(adapted, self.profile, _language(job)), path)
+                finally:
+                    page.close()
             evaluation = ScoreResult.model_validate_json(row["evaluation_json"]) if row["evaluation_json"] else None
             covered, missing = coverage(evaluation) if evaluation else ([], [])
             result = TailoredCV(path, covered, missing)
-        except (CVError, LLMError, PlaywrightError, ConfigError) as exc:
+        except (CVError, LLMError, PlaywrightError, ConfigError, ValueError, OSError) as exc:
             db.log(self.conn, "warning", "cv", f"{job.title}: currículo adaptado não gerado ({_first_line(exc)}); vale o original")
         self._cvs[app_id] = result
         return result
@@ -269,7 +271,7 @@ class Applier:
 
     def _ask_approval(self, app_id: int, row: sqlite3.Row, page: Page, plan: FillPlan, tailored: Tailored,
                       summary: ApplySummary) -> None:
-        if self.confirm is not None and self.confirm(self._preview(row, plan, tailored)):
+        if self.confirm is not None and self.confirm(self._preview(app_id, row, plan, tailored)):
             self._send(app_id, row, page, plan, summary)
             return
         db.set_application_status(self.conn, app_id, "pending_approval")
@@ -366,11 +368,15 @@ class Applier:
         return {"fields": _audit_fields(plan), "blockers": plan.blockers, "skipped": plan.skipped,
                 "tailored": tailored.model_dump()}
 
-    def _preview(self, row: sqlite3.Row, plan: FillPlan, tailored: Tailored) -> str:
+    def _preview(self, app_id: int, row: sqlite3.Row, plan: FillPlan, tailored: Tailored) -> str:
         lines = [f"Vaga: {row['title']} ({row['company']})", f"Link: {row['url']}", f"Score: {row['score']}", "", "Campos:"]
         lines += [f"  {field['label']}: {field['value']}" for field in _audit_fields(plan)]
         if plan.skipped:
             lines += ["", "Deixados em branco:", *(f"  {label}" for label in plan.skipped)]
+        cv = self._cvs.get(app_id)
+        if cv:
+            attached = "vai anexado" if self.settings.cv.upload_tailored else "não vai anexado, vai o original"
+            lines += ["", f"Currículo adaptado ({attached}): {cv.path}"]
         lines += ["", "Carta:", tailored.cover_letter]
         return "\n".join(lines)
 
@@ -387,7 +393,12 @@ class Applier:
             lines.append(f"- Avaliação da vaga (requisitos, lacunas, como lidar): ../../../reports/vagas/{row['id']}.md")
         cv = self._cvs.get(app_id)
         if cv:
-            attached = "é o que vai anexado" if self.settings.cv.upload_tailored else "o anexado é o original (cv.upload_tailored)"
+            if row["apply_path"] == "manual":
+                attached = "anexe este ou o original ao enviar"
+            elif self.settings.cv.upload_tailored:
+                attached = "é o que vai anexado"
+            else:
+                attached = "o anexado é o original (cv.upload_tailored)"
             lines.append(f"- Currículo adaptado à vaga: {cv.path.name} ({attached})")
             if cv.covered or cv.missing:
                 lines.append(f"- Requisitos importantes com evidência no currículo: {len(cv.covered)} de "

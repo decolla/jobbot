@@ -206,3 +206,21 @@ def test_funnel_shows_response_rates_by_source_and_score(conn, project):
     assert "entrevistas e testes: 1 | propostas: 0 | recusas: 1 | sem resposta: 1" in text
     assert "greenhouse: 1 de 2" in text and "lever: 1 de 2" in text
     assert "70-79: 0 de 1" in text and "80-89: 1 de 1" in text and "90+: 1 de 2" in text
+
+
+def test_funnel_does_not_count_acknowledgment_or_late_answer_as_no_response(conn, project):
+    for n, stages in enumerate([["screening"], ["no_response", "interview"]], 1):
+        app_id = db.create_application(conn, _job(conn, n, score=80, status="scored"), "auto")
+        db.mark_submitted(conn, app_id)
+        for stage in stages:
+            db.add_stage(conn, app_id, stage, "email")
+    text = _report(conn, project)
+    assert "Enviadas: 2 | com resposta: 1 (50%)" in text
+    assert "sem resposta: 0" in text
+
+
+def test_job_closed_before_sending_is_news_with_the_link(conn, project):
+    app_id = _app(conn, 1, "job_closed")
+    db.log_event(conn, "application_job_closed", application_id=app_id, payload={"url": "https://a.io/1"})
+    text = _report(conn, project)
+    assert "- Vaga encerrada antes do envio: Estágio Dev 1 (Acme), confira https://a.io/1" in text
