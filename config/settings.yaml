@@ -50,3 +50,10 @@ notifications:
 
 auto_reply:
   enabled: false
+
+# Candidatura sem resposta: rascunho de follow-up depois de after_days dias, no máximo max_attempts vezes.
+# Depois disso fica marcada "sem resposta". O jobbot nunca envia o follow-up: você revisa e manda.
+followups:
+  enabled: true
+  after_days: 7
+  max_attempts: 2

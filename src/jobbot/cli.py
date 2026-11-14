@@ -8,6 +8,7 @@ import traceback
 from datetime import date
 
 from jobbot import db, pipeline
+from jobbot.actions.followup import plan_followups
 from jobbot.apply import manual
 from jobbot.apply.base import Applier, ApplySummary, mark_done, recover_interrupted, reject_application
 from jobbot.apply.form_filler import login_interactively
@@ -177,9 +178,11 @@ def cmd_track(args: argparse.Namespace) -> int:
         else:
             print("Acompanhamento por e-mail desligado (tracking.email em settings.yaml).")
         closed = check_open_jobs(conn, pipeline.build_http(settings))
+        followups = plan_followups(conn, root, profile, settings, date.today())
     finally:
         conn.close()
     print(f"Portais: {closed} vaga(s) encerrada(s).")
+    print(f"Follow-ups: {followups.created} rascunho(s) novo(s) | marcadas sem resposta: {followups.cold}")
     return 1 if failed else 0
 
 

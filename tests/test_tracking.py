@@ -596,3 +596,11 @@ def test_resolve_command_closes_action(project, capsys):
     assert db.open_action_items(conn) == []
     conn.close()
     assert main(["resolve", str(item_id)]) == 1
+
+
+def test_answer_by_email_closes_open_follow_up(conn, project):
+    app_id = _submitted(conn)
+    db.add_action_item(conn, app_id, "follow_up", "Follow-up 1: Estágio Dev")
+    _track(conn, project, FakeMailbox(_message(subject="Recebemos sua candidatura na Acme", text="Seu perfil está em análise.")))
+    open_kinds = [i["kind"] for i in db.open_action_items(conn)]
+    assert "follow_up" not in open_kinds

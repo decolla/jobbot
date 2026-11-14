@@ -181,3 +181,13 @@ def test_new_approved_job_links_its_evaluation(conn, project):
     (project / "reports" / "vagas").mkdir(parents=True)
     (project / "reports" / "vagas" / f"{job_id}.md").write_text("avaliação", encoding="utf-8")
     assert f"[avaliação](vagas/{job_id}.md)" in _report(conn, project)
+
+
+def test_follow_up_shows_draft_link_and_no_response_is_news(conn, project):
+    app_id = _app(conn, 1, "submitted")
+    item = db.add_action_item(conn, app_id, "follow_up", "Follow-up 1: Estágio Dev 1", due_date=TODAY.isoformat())
+    db.set_action_prep(conn, item, "reports/followups/1-1.md")
+    db.log_event(conn, "no_response", application_id=app_id, job_id=1, payload={"stage": "no_response"})
+    text = _report(conn, project)
+    assert "[rascunho da mensagem](followups/1-1.md)" in text
+    assert "- Sem resposta: Estágio Dev 1 (Acme)" in text

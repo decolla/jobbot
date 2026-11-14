@@ -229,6 +229,7 @@ class _Tracker:
         if not changed:
             return
         self.summary.stage_changes += 1
+        db.complete_action_items(self.conn, app_id, ["follow_up"])  # a empresa respondeu
         if stage == "rejected":
             db.complete_action_items(self.conn, app_id, CLOSED_BY_REJECTION)
         elif stage in HUMAN_STAGES:

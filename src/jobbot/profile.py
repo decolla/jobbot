@@ -146,6 +146,12 @@ class AutoReplySettings(_Strict):
     enabled: bool = False
 
 
+class FollowupSettings(_Strict):
+    enabled: bool = True
+    after_days: int = Field(default=7, ge=1)
+    max_attempts: int = Field(default=2, ge=0)
+
+
 class Settings(_Strict):
     mode: Literal["dry-run", "approval", "auto"] = "dry-run"
     min_score: int = Field(default=70, ge=0, le=100)
@@ -158,6 +164,7 @@ class Settings(_Strict):
     tracking: TrackingSettings = Field(default_factory=TrackingSettings)
     notifications: NotificationSettings = Field(default_factory=NotificationSettings)
     auto_reply: AutoReplySettings = Field(default_factory=AutoReplySettings)
+    followups: FollowupSettings = Field(default_factory=FollowupSettings)
 
 
 @dataclass(frozen=True)

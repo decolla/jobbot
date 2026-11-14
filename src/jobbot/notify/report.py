@@ -13,7 +13,7 @@ from jobbot import db
 
 STAGE_LABELS = {
     "screening": "Em análise", "test": "Teste", "video": "Vídeo", "interview": "Entrevista",
-    "offer": "Proposta", "rejected": "Recusa", "job_closed": "Vaga encerrada",
+    "offer": "Proposta", "rejected": "Recusa", "job_closed": "Vaga encerrada", "no_response": "Sem resposta",
 }
 URGENT_DAYS = 2
 MAX_NEW_JOBS = 30
@@ -45,7 +45,7 @@ def _news(conn: sqlite3.Connection, day: str) -> list[tuple[str, str, str]]:
     rows = conn.execute(
         """SELECT e.kind, e.payload_json, j.title, j.company FROM events e
            JOIN applications a ON a.id = e.application_id JOIN jobs j ON j.id = a.job_id
-           WHERE e.kind IN ('stage_detected', 'stage_unverified', 'job_closed') AND substr(e.created_at, 1, 10) = ?
+           WHERE e.kind IN ('stage_detected', 'stage_unverified', 'job_closed', 'no_response') AND substr(e.created_at, 1, 10) = ?
            ORDER BY e.id""",
         (day,),
     ).fetchall()
@@ -139,7 +139,8 @@ def render_report(data: DailyData, root: Path) -> str:
         if item["link"]:
             line += f" · {item['link']}"
         if item["prep_path"]:
-            line += f" · [material de preparação]({_link(root, item['prep_path'])})"
+            label = "rascunho da mensagem" if item["kind"] == "follow_up" else "material de preparação"
+            line += f" · [{label}]({_link(root, item['prep_path'])})"
         actions.append(line + f" · feito: `jobbot resolve {item['id']}`")
     to_send = [
         f"- {a['title']} ({a['company']}), score {a['score']}: {a['url']}{_pack(root, a['id'])}"

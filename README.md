@@ -171,6 +171,12 @@ com o número que aparece em `jobbot status`. Uma recusa fecha as pendências da
 - Responde no máximo uma vez a mesma coisa por candidatura.
 - Cada resposta enviada fica registrada.
 
+**Follow-up**: candidatura enviada sem nenhuma resposta em 7 dias vira pendência com um rascunho curto em
+`reports/followups/`, no idioma da vaga. O segundo vem uma semana depois de você fazer o primeiro (`jobbot resolve`).
+Sem resposta depois de dois, a candidatura fica marcada "sem resposta". Qualquer e-mail da empresa fecha o
+follow-up aberto. O jobbot nunca envia follow-up: você revisa e manda para quem conduz o processo. Ajuste em
+`followups` no `settings.yaml`.
+
 ## Relatório e notificações
 
 `reports/AAAA-MM-DD.md` traz:
