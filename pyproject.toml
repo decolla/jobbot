@@ -1,8 +1,10 @@
 [project]
 name = "jobbot"
 version = "0.1.0"
-description = "Agente pessoal de candidaturas a vagas"
+description = "Agente pessoal de candidaturas a vagas de estágio e júnior"
 readme = "README.md"
+license = "MIT"
+authors = [{ name = "Pedro de Colla Varise" }]
 requires-python = ">=3.11"
 dependencies = [
     "beautifulsoup4>=4.12",

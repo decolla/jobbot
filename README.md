@@ -1,6 +1,20 @@
-# jobbot
+<h1 align="center">jobbot</h1>
 
-Agente pessoal de candidaturas a vagas de estágio e júnior, rodando na sua máquina.
+<p align="center">
+  <strong>Agente pessoal de candidaturas a vagas de estágio e júnior, rodando na sua máquina.</strong><br>
+  Busca, avalia, prepara e acompanha candidaturas todo dia, sem inventar nada sobre você.
+</p>
+
+<p align="center">
+  <img alt="Python 3.11+" src="https://img.shields.io/badge/python-3.11%2B-3776AB?logo=python&logoColor=white">
+  <img alt="uv" src="https://img.shields.io/badge/uv-gerenciador-DE5FE9">
+  <img alt="Playwright" src="https://img.shields.io/badge/Playwright-navegador-2EAD33?logo=playwright&logoColor=white">
+  <img alt="SQLite" src="https://img.shields.io/badge/SQLite-local-003B57?logo=sqlite&logoColor=white">
+  <img alt="Testes" src="https://img.shields.io/badge/testes-594%20passando-brightgreen">
+  <img alt="Licença MIT" src="https://img.shields.io/badge/licen%C3%A7a-MIT-blue">
+</p>
+
+---
 
 Todo dia ele:
 
@@ -10,6 +24,29 @@ Todo dia ele:
 4. acompanha os processos pelo seu e-mail e pelos portais;
 5. cria pendências para o que só você pode fazer (testes, entrevistas, vídeos), com material de treino;
 6. gera um relatório em `reports/AAAA-MM-DD.md` e, se você quiser, avisa pelo Telegram ou por e-mail.
+
+```mermaid
+flowchart LR
+    A[Fontes públicas<br>Greenhouse, Lever...] --> B[Regras<br>senioridade, local,<br>eliminatórios]
+    B --> C[Avaliação com Claude<br>requisitos e evidências]
+    C --> D[Candidatura<br>carta, respostas,<br>currículo adaptado]
+    D -->|dry-run / aprovação / auto| E[Formulário]
+    E --> F[Acompanhamento<br>e-mail e portais]
+    F --> G[Relatório do dia<br>pendências e funil]
+```
+
+## Destaques
+
+- **Nada inventado, conferido no código.** Cada afirmação de carta, resposta, resumo do currículo ou história de
+  entrevista precisa de um trecho literal dos seus documentos. Termo técnico, empresa ou número que não esteja lá
+  derruba o texto.
+- **Avaliação de cada vaga** com tabela de requisitos, citação da vaga, sua evidência, lacunas e como lidar com elas.
+- **Currículo adaptado por vaga** em PDF compatível com ATS, no idioma da vaga, que só reordena o que já existe.
+- **Seguro por padrão.** Começa em `dry-run`, para em CAPTCHA, senha, salário e dados sensíveis, nunca candidata
+  duas vezes e respeita `robots.txt` e termos de uso.
+- **Acompanha o processo.** Lê o e-mail (só leitura), detecta etapas, cria pendências com prazo, gera material de
+  treino e rascunhos de follow-up.
+- **Tudo local e auditável.** SQLite com o registro de cada ação; seus dados nunca entram no git.
 
 ## O que ele nunca faz
 
@@ -286,3 +323,8 @@ uv run pytest -m "not browser"   # sem navegador
 
 Os testes não acessam a internet. Parsers usam fixtures em `tests/fixtures/`, e o envio real só acontece contra
 formulários locais.
+
+## Licença
+
+[MIT](LICENSE). Algumas ideias da avaliação de vagas, do currículo adaptado, do follow-up e das histórias para
+entrevista vieram do [career-ops](https://github.com/career-ops-hq/career-ops), também MIT.
